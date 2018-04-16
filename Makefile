@@ -1,7 +1,14 @@
-SRC =  test_hash.c hashtable.c xxhash.c
+SRC = xxhash.c hashtable.c test_hash.c
+DEBUG =	-O0 -Wall -Wextra -ggdb
+SAMPLE = tar -xjf sample.tar.bz2
 
 test: $(SRC)
-	gcc -O2 -Wall -o $@ $^
+	$(SAMPLE)
+	gcc -O2 -o $@ $^
+
+debug: $(SRC)
+	$(SAMPLE)
+	gcc $(DEBUG) -o $@ $^
 	
 .PHONY: clean
 clean:
