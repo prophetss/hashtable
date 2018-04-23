@@ -1,6 +1,11 @@
+#ifndef _HASHTABLE_H_
+#define _HASHTABLE_H_
+
+
 #include <stddef.h>
 #include "xxhash.h"
 
+/*64位使用xx64，32位使用xx32*/
 #ifdef __x86_64__
 #define TABLE_BITS          64
 #define XXHASH(a, b, c)     XXH64(a, b, c)
@@ -15,19 +20,19 @@ typedef struct hash_table_element hash_table_element_t;
 
 typedef struct hash_table_element
 {
-	/*key长度*/
+	/* key长度 */
     size_t key_len;
 
-	/*value长度*/
+	/* value长度 */
     size_t value_len;
 
-    /*key数据*/
+    /* key数据 */
     void *key;
 
-    /*value数据*/
+    /* value数据 */
     void *value;
 
-    /*下一个相同hash值数据，拉链法*/
+    /* 下一个相同hash值数据，拉链法 */
     hash_table_element_t *next;
 
 } hash_table_element_t;
@@ -36,22 +41,35 @@ typedef struct hash_table_element
 typedef struct hash_table
 {
 	/*
-	 * 后期计划参考redis哈希表分两个表以追求resize时负载均衡，
-	 * 目前固定使用first，不自动扩容
+	 * 初始表，参考redis哈希表分两个表以追求resize时负载均衡，
+	 * 当表扩容时会逐次将first表内没饿元素移至second，当全部
+     * 转移完后second表替换first表
 	 */
     hash_table_element_t  **first_data_store;
 
-    /*暂时没用*/
+    /*
+     * 初始为NULL，发生表扩容时产生，大小为first表两倍，此后
+     * 在插入查询删除时会逐个将first表中元素移至second表中
+     */
     hash_table_element_t  **second_data_store;
 
-	/*暂时没用*/
-    size_t key_count;
-
-	/*暂时没用*/
+    /*
+     * 记录指向first表中按顺序第一个key不为空的序号，扩容后
+     * first表元素移至second表时使用
+     */
     size_t rehashidx;
 
-    /*表容量*/
+    /* 表容量 */
     size_t table_capacity;
+
+	/* 当前表内key数量 */
+    size_t key_count;
+
+    /*
+     * 表内最大key数量，其值等于table_capacity*LOAD_FACTOR，当
+     * key_count大于等于此值是会扩容
+     */
+    size_t max_key_count;
 
     /* 
      * 表容量对应xxhash结果偏移量，例如表容量为2的16次方，使
@@ -62,17 +80,37 @@ typedef struct hash_table
 
 } hash_table_t;
 
+
+#define HASH_TABLE_NEW()  hash_table_new()
+
+#define HASH_TABLE_NEW_N(n)  hash_table_new_n(n)
+
+#define HASH_TABLE_DELETE(table)  hash_table_delete(table)
+
+#define HASH_TABLE_ADD(table, key, value)  hash_table_add(table, key, sizeof(key), value, sizeof(value))
+
+#define HASH_TABLE_REMOVE(table, key)  hash_table_remove(table, key, sizeof(key))
+
+#define HASH_TABLE_LOOKUP(table, key)  hash_table_lookup(table, key, sizeof(key))
+
+
+/*以默认大小-DEFAULT_CAPACITY宏创建hash表，失败返回NULL*/
 hash_table_t* hash_table_new();
 
+/*以指定大小创建hash表，失败返回NULL*/
 hash_table_t* hash_table_new_n(size_t n);
 
+/*删除表释放资源*/
 void hash_table_delete(hash_table_t *table);
 
+/*添加，失败返回-1，成功返回0，发生替换返回1*/
 int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len);
 
+/*删除，失败返回-1，成功返回0*/
 int hash_table_remove(hash_table_t *table, void *key, size_t key_len);
 
+/*查询，成功返回value指针，失败返回NULL*/
 void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len);
 
 
-
+#endif /*!_HASHTABLE_H_*/
