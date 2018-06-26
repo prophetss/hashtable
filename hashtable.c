@@ -3,9 +3,9 @@
 #include "hashtable.h"
 
 
-#define DEFAULT_CAPACITY       	  32
+#define DEFAULT_CAPACITY       	  1
 
-#define LOAD_FACTOR		     	0.75
+#define LOAD_FACTOR		     	10
 
 
 static unsigned char get_digits(size_t n)
@@ -25,7 +25,7 @@ static int key_compare(void *key, size_t key_len, void *key0, size_t key0_len)
 	return memcmp(key, key0, key_len);
 }
 
-static hash_table_element_t* element_new(void *key, size_t key_len, void *value, size_t value_len)
+static hash_table_element_t* element_new(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len)
 {
 	hash_table_element_t *element = (hash_table_element_t*)malloc(sizeof(hash_table_element_t));
 	if (!element) {
@@ -33,14 +33,23 @@ static hash_table_element_t* element_new(void *key, size_t key_len, void *value,
 	}
 
 	element->key = malloc(key_len);
-	element->value = malloc(value_len);
-	if (NULL == element->key || NULL == element->value) {
+	if (!element->key) {
+		free(element);
 		return NULL;
 	}
-
 	memcpy(element->key, key, key_len);
-	memcpy(element->value, value, value_len);
 
+	if (table->mode == COPY_MODE) {
+		element->value = malloc(value_len);
+		if (!element->value) {
+			free(element);
+			return NULL;
+		}
+		memcpy(element->value, value, value_len);
+	}
+	else {
+		element->value = value;
+	}
 	element->key_len = key_len;
 	element->value_len = value_len;
 	element->next = NULL;
@@ -48,25 +57,27 @@ static hash_table_element_t* element_new(void *key, size_t key_len, void *value,
 	return element;
 }
 
-static void element_delete(hash_table_element_t *element)
+static void element_delete(hash_table_t *table, hash_table_element_t *element)
 {
-	free(element->value);
+	if (table->mode == COPY_MODE) {
+		free(element->value);
+	}
 	free(element->key);
 	free(element);
 }
 
-static void data_store_delete(hash_table_element_t **data_store, const size_t capacity)
+static void data_store_delete(hash_table_t *table, hash_table_element_t **data_store, const size_t capacity)
 {
 	for (size_t i = 0; i < capacity; i++) {
 		while (NULL != data_store[i]) {
 			hash_table_element_t *temp = data_store[i];
 			data_store[i] = data_store[i]->next;
-			element_delete(temp);
+			element_delete(table, temp);
 		}
 	}
 }
 
-hash_table_t* hash_table_new_n(size_t n)
+hash_table_t* hash_table_new_n(size_t n, table_mode_t mode)
 {
 	hash_table_t *new_hashtable = (hash_table_t*)malloc(sizeof(hash_table_t));
 	if (NULL == new_hashtable) {
@@ -84,22 +95,23 @@ hash_table_t* hash_table_new_n(size_t n)
 	new_hashtable->second_data_store = NULL;
 	new_hashtable->rehashidx = 0;
 	new_hashtable->key_count = 0;
+	new_hashtable->mode = mode;
 	return new_hashtable;
 }
 
-hash_table_t* hash_table_new()
+hash_table_t* hash_table_new(table_mode_t mode)
 {
-	return hash_table_new_n(DEFAULT_CAPACITY);
+	return hash_table_new_n(DEFAULT_CAPACITY, mode);
 }
 
 void hash_table_delete(hash_table_t *table)
 {
 	if (NULL != table->second_data_store) {
-		data_store_delete(&(table->first_data_store[table->rehashidx]), table->table_capacity/2 - table->rehashidx);
-		data_store_delete(table->second_data_store, table->table_capacity);
+		data_store_delete(table, &(table->first_data_store[table->rehashidx]), table->table_capacity/2 - table->rehashidx);
+		data_store_delete(table, table->second_data_store, table->table_capacity);
 	}
 	else {
-		data_store_delete(table->first_data_store, table->table_capacity);
+		data_store_delete(table, table->first_data_store, table->table_capacity);
 	}
 	free(table);
 }
@@ -197,7 +209,7 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 		hash_table_expand(table);
 	}
 
-	hash_table_element_t *element = element_new(key, key_len, value, value_len);
+	hash_table_element_t *element = element_new(table, key, key_len, value, value_len);
 	if (NULL == element) {
 		return -1;
 	}
@@ -221,7 +233,7 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 				prev->next = element;
 			}
 			element->next = to_delete->next;
-			element_delete(to_delete);
+			element_delete(table, to_delete);
 			return 1;
 		}
 		prev = temp;
@@ -258,7 +270,7 @@ int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 				prev->next = temp->next;
 			}
 			table->key_count--;
-			element_delete(temp);
+			element_delete(table, temp);
 			return 0;
 		}
 		prev = temp;

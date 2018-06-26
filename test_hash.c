@@ -11,7 +11,7 @@
 void test_add_and_remove()
 {
 	printf("add and remove test start\n");
-	hash_table_t *table = hash_table_new();
+	hash_table_t *table = hash_table_new(REF_MODE);
 	char key[] = "Chinese Population";
 	unsigned long long value = 1400000000L;
 	printf("%s:%llu\n", key, value);
@@ -60,7 +60,7 @@ void test_add_and_remove()
 	printf("add and remove test end\n");
 }
 
-/*获取运行时钟周期，调用此函数在我本机实测消耗时间约为clock（）的十分之一*/
+/*获取运行时钟周期，调用此函数在我本机实测消耗时间平均约为clock（）的十四分之一*/
 inline __u64 rdtsc()
 {
 	__u32 lo, hi;
@@ -71,9 +71,11 @@ inline __u64 rdtsc()
 	return (__u64)hi << 32 | lo;
 }
 
-void test_performance()
+void test_performance(table_mode_t mode)
 {
-	printf("performance test start\n");
+	const char *modes[2] = {"REF_MODE", "COPY_MODE"};
+
+	printf("%s performance test start\n", modes[mode]);
 	static char key[SAMPLE_SIZE][160];
 	static size_t klen[SAMPLE_SIZE];
 	static char value[SAMPLE_SIZE][16];
@@ -100,7 +102,7 @@ void test_performance()
 	}
 
 	/*创建*/
-	hash_table_t *table = hash_table_new();
+	hash_table_t *table = hash_table_new(mode);
 
 	/*添加*/
 	unsigned long long max = 0;
@@ -140,7 +142,7 @@ void test_performance()
 
 	/*释放*/
 	hash_table_delete(table);
-	printf("performance test end\n");
+	printf("%s performance test end\n", modes[mode]);
 }
 
 int main()
@@ -150,8 +152,11 @@ int main()
 	/*插入删除测试*/
 	test_add_and_remove();
 
-	/*插入、查询性能测试*/
-	test_performance();
+	/*插入、查询性能测试(引用模式)*/
+	test_performance(REF_MODE);
+
+	/*插入、查询性能测试(拷贝模式)*/
+	test_performance(COPY_MODE);
 
 	printf("all test end\n");
 }

@@ -16,6 +16,14 @@
 #define XXHASH(a, b, c)     XXH32(a, b, c)
 #endif
 
+/* 
+ * 表内添加value时的方式：引用模式value传入的方式为引用，
+ * 删除时不会释放；拷贝模式内部申请内存拷贝value值，删除
+ * 会释放表内value
+ */
+typedef enum {REF_MODE = 0, COPY_MODE} table_mode_t;
+
+
 typedef struct hash_table_element hash_table_element_t;
 
 typedef struct hash_table_element
@@ -71,6 +79,9 @@ typedef struct hash_table
      */
     size_t max_key_count;
 
+    /* 表内添加value时的方式：REF_MODE-为引用模式，COPY_MODE-为拷贝模式 */
+    table_mode_t mode;
+
     /* 
      * 表容量对应xxhash结果偏移量，例如表容量为2的16次方，使
      * 用xx64，则rdigits为64-16，下次hash结果直接左移rdigits
@@ -81,24 +92,11 @@ typedef struct hash_table
 } hash_table_t;
 
 
-#define HASH_TABLE_NEW()  hash_table_new()
-
-#define HASH_TABLE_NEW_N(n)  hash_table_new_n(n)
-
-#define HASH_TABLE_DELETE(table)  hash_table_delete(table)
-
-#define HASH_TABLE_ADD(table, key, value)  hash_table_add(table, key, sizeof(key), value, sizeof(value))
-
-#define HASH_TABLE_REMOVE(table, key)  hash_table_remove(table, key, sizeof(key))
-
-#define HASH_TABLE_LOOKUP(table, key)  hash_table_lookup(table, key, sizeof(key))
-
-
 /*以默认大小-DEFAULT_CAPACITY宏创建hash表，失败返回NULL*/
-hash_table_t* hash_table_new();
+hash_table_t* hash_table_new(table_mode_t mode);
 
-/*以指定大小创建hash表，失败返回NULL*/
-hash_table_t* hash_table_new_n(size_t n);
+/*以指定大小n创建hash表，失败返回NULL*/
+hash_table_t* hash_table_new_n(size_t n, table_mode_t mode);
 
 /*删除表释放资源*/
 void hash_table_delete(hash_table_t *table);
