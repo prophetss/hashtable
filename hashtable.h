@@ -2,11 +2,15 @@
 #define _HASHTABLE_H_
 
 
-#include <stddef.h>
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
+
 #include "xxhash.h"
 
 /*64位使用xx64，32位使用xx32*/
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_WIN64)
 #define TABLE_BITS          64
 #define XXHASH(a, b, c)     XXH64(a, b, c)
 #define hash_size_t         XXH64_hash_t
@@ -15,6 +19,15 @@
 #define hash_size_t         XXH32_hash_t
 #define XXHASH(a, b, c)     XXH32(a, b, c)
 #endif
+
+/*默认初始表容量*/
+#define DEFAULT_CAPACITY       	  4
+
+/*
+ * 负载因子，负载因子乘以表容量为实际最大可容纳元素数量值，
+ * 超过此值就会发生表扩容
+ */
+#define LOAD_FACTOR		     	0.75
 
 /* 
  * 表内添加value时的方式：引用模式value传入的方式为引用，
@@ -92,7 +105,8 @@ typedef struct hash_table
 } hash_table_t;
 
 
-/*以默认大小-DEFAULT_CAPACITY宏创建hash表，失败返回NULL*/
+
+/*以默认大小(DEFAULT_CAPACITY宏)创建hash表，失败返回NULL*/
 hash_table_t* hash_table_new(table_mode_t mode);
 
 /*以指定大小n创建hash表，失败返回NULL*/
@@ -109,6 +123,17 @@ int hash_table_remove(hash_table_t *table, void *key, size_t key_len);
 
 /*查询，成功返回value指针，失败返回NULL*/
 void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len);
+
+/*
+ * 获取hash表内所有元素（table->key_count个元素），返回元素数组列表。拷贝模式复制数据，
+ * 引用模式返回指针数组，指针指向table表内数据，空表返回NULL
+ */
+hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode);
+
+
+#if defined (__cplusplus)
+}
+#endif
 
 
 #endif /*!_HASHTABLE_H_*/

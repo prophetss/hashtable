@@ -1,11 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
+#include "error.h"
 #include "hashtable.h"
-
-
-#define DEFAULT_CAPACITY       	  1
-
-#define LOAD_FACTOR		     	10
 
 
 static unsigned char get_digits(size_t n)
@@ -28,23 +24,16 @@ static int key_compare(void *key, size_t key_len, void *key0, size_t key0_len)
 static hash_table_element_t* element_new(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len)
 {
 	hash_table_element_t *element = (hash_table_element_t*)malloc(sizeof(hash_table_element_t));
-	if (!element) {
-		return NULL;
-	}
+	if(!element) sys_exit_throw();
 
 	element->key = malloc(key_len);
-	if (!element->key) {
-		free(element);
-		return NULL;
-	}
+	if(!element->key) sys_exit_throw();
+
 	memcpy(element->key, key, key_len);
 
 	if (table->mode == COPY_MODE) {
 		element->value = malloc(value_len);
-		if (!element->value) {
-			free(element);
-			return NULL;
-		}
+		if(!element->value) sys_exit_throw();
 		memcpy(element->value, value, value_len);
 	}
 	else {
@@ -83,7 +72,7 @@ hash_table_t* hash_table_new_n(size_t n, table_mode_t mode)
 	if (NULL == new_hashtable) {
 		return NULL;
 	}
-	size_t digits = get_digits(n);
+	unsigned char digits = get_digits(n);
 	new_hashtable->table_capacity_rdigits = TABLE_BITS - digits;
 	new_hashtable->table_capacity = (size_t)(1 << digits);
 	new_hashtable->first_data_store = calloc(new_hashtable->table_capacity, sizeof(hash_table_element_t*));
@@ -251,14 +240,17 @@ int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 	hash_table_element_t *prev = NULL, *temp = NULL;
 	hash_table_element_t **phead = NULL;
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
-		if (NULL == (temp = table->second_data_store[hash_key >> table->table_capacity_rdigits])) {
+		if (NULL == table->second_data_store[hash_key >> table->table_capacity_rdigits]) {
 			phead = &(table->first_data_store[hash_key >> (table->table_capacity_rdigits + 1)]);
-
+		}
+		else {
+			phead = &(table->second_data_store[hash_key >> (table->table_capacity_rdigits + 1)]);
 		}
 	}
 	else {
 		phead = &(table->first_data_store[hash_key >> table->table_capacity_rdigits]);
 	}
+
 	temp = *phead;
 
 	while (temp) {
@@ -277,4 +269,73 @@ int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 		temp = temp->next;
 	}
 	return -1;
+}
+
+typedef void(*ELEM_FUNC)(hash_table_element_t **, hash_table_element_t *);
+
+static void elem_cpy(hash_table_element_t **p, hash_table_element_t *t)
+{
+	memcpy(*p, t, sizeof(hash_table_element_t));
+
+	(*p)->key = malloc(t->key_len);
+	if (!(*p)->key) sys_exit_throw("allocated memory failed!");
+	memcpy((*p)->key, t->key, t->key_len);
+
+	(*p)->value = malloc(t->value_len);
+	if (!(*p)->value) sys_exit_throw("allocated memory failed!");
+	memcpy((*p)->value, t->value, t->value_len);
+}
+
+static void elem_ref(hash_table_element_t **p, hash_table_element_t *t)
+{
+	memcpy(*p, t, sizeof(hash_table_element_t));
+}
+
+static void get_elements(hash_table_element_t **p, hash_table_element_t **data_store, size_t n, ELEM_FUNC elem_func)
+{
+	for (size_t i = 0; i < n; ++i) {
+		hash_table_element_t *tmp = data_store[i];
+		while (tmp) {
+			elem_func(p, tmp);
+			tmp = tmp->next;
+			++(*p);
+		}
+	}
+}
+
+hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode)
+{
+	/*表内无元素*/
+	if (0 == table->key_count) {
+		return NULL;
+	}
+
+	/*创建返回列表*/
+	hash_table_element_t *head = calloc(table->key_count, sizeof(hash_table_element_t));
+	if (!head) sys_exit_throw("allocated memory failed!");
+	
+	hash_table_element_t *ptmp = head;
+
+	/*rehashidx为0表示second表为空*/
+	size_t sn = table->rehashidx != 0 ? table->table_capacity : 0;
+
+	/*second表不为空则first表大小为table_capacity/2*/
+	size_t fn = sn == 0 ? table->table_capacity : sn / 2;
+
+	/*不同模式传入不同函数*/
+	ELEM_FUNC elem_func;
+	if (mode == COPY_MODE) {
+		elem_func = elem_cpy;
+	}
+	else {
+		elem_func = elem_ref;
+	}
+
+	/*筛出first表元素*/
+	get_elements(&ptmp, table->first_data_store, fn, elem_func);
+
+	/*筛出second表元素*/
+	get_elements(&ptmp, table->second_data_store, sn, elem_func);
+
+	return head;
 }

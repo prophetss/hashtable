@@ -1,8 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <assert.h>
-#include<linux/types.h>
+#include <linux/types.h>
 #include "hashtable.h"
 
 
@@ -10,45 +11,54 @@
 
 void test_add_and_remove()
 {
-	printf("add and remove test start\n");
+	printf("add,remove and get all elements test start\n");
 	hash_table_t *table = hash_table_new(REF_MODE);
-	char key[] = "Chinese Population";
-	unsigned long long value = 1400000000L;
-	printf("%s:%llu\n", key, value);
-
-	int ret = hash_table_add(table, key, sizeof(key), &value, sizeof(unsigned long long));
-	/*插入成功,无替换,返回0*/
-	if (ret == 0) {
-		char *res = hash_table_lookup(table, key, sizeof(key));
-		printf("lookup result: %s:%llu. add successfully. happy :) \n", key, *(unsigned long long*)res);
-	}
-	else {
-		printf("failed to add a value. sad :( \n");
-		return;
+	//当前表容量设置为4负载因子为0.75，8条数据会有扩容发生
+	char* keys[] = {"Chinese Population", "India's Population", "American Population", "Indonesian Population",
+	"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population"};
+	unsigned long long values[] = {1400000000L, 1300000000L, 320000000L, 250000000L, 200000000L, 190000000L, 
+		180000000L, 160000000L};
+	int ret;
+	unsigned int i;
+	for (i = 0; i < sizeof(keys)/sizeof(char*); ++i) {
+		ret = hash_table_add(table, keys[i], strlen(keys[i]), &values[i], sizeof(unsigned long long));
+		/*插入成功,无替换,返回0*/
+		if (ret == 0) {
+			/*成功反查*/
+			char *res = hash_table_lookup(table, keys[i], strlen(keys[i]));
+			assert(memcmp(res, &values[i], sizeof(unsigned long long)) == 0);
+		}
+		else {
+			printf("failed to add a value. sad :( \n");
+			return;
+		}
 	}
 
 	/*插入相同key替换value*/
 	char new_value[] = "1.4B";
-	ret = hash_table_add(table, key, sizeof(key), new_value, sizeof(new_value));
+	ret = hash_table_add(table, keys[0], strlen(keys[0]), new_value, sizeof(new_value));
 	/*插入成功,发生替换,返回1*/
 	if (ret == 1) {
-		char *res = hash_table_lookup(table, key, sizeof(key));
-		printf("lookup result: %s:%s. change a value successfully. happy :) \n", key, res);
+		char *res = hash_table_lookup(table, keys[0], strlen(keys[0]));
+		assert(memcmp(res, new_value, sizeof(new_value)) == 0);
 	}
 	else {
 		printf("failed to change a value. sad :( \n");
 		return;
 	}
 
+	printf("all of the add tests successfully. happy :) \n");
+
 	/*删除*/
-	ret = hash_table_remove(table, key, sizeof(key));
+	ret = hash_table_remove(table, keys[0], strlen(keys[0]));
 	if (ret == 0) {
-		char *res = hash_table_lookup(table, key, sizeof(key));
+		char *res = hash_table_lookup(table, keys[0], strlen(keys[0]));
 		if (NULL == res) {
 			printf("lookup result: value is null, remove successfully. happy :) \n");
 		}
 		else {
 			printf("lookup result: value is not null, coding bugs. very sad :( :( :( \n");
+			return;
 		}
 	}
 	else {
@@ -56,8 +66,20 @@ void test_add_and_remove()
 		return;
 	}
 
+	//获取所有元素
+	hash_table_element_t *all = hash_table_elements(table, COPY_MODE);
+	for (i = 0; i < table->key_count; ++i) {
+		assert(memcmp(hash_table_lookup(table, all[i].key, all[i].key_len), all[i].value, all[i].value_len) == 0);
+		//拷贝模式调用者负责释放
+		free(all[i].key);
+		free(all[i].value);
+	}
+	free(all);
+	printf("get all of elements successfully. happy :) \n");
+	
 	hash_table_delete(table);
-	printf("add and remove test end\n");
+
+	printf("add,remove and get all elements test end\n\n");
 }
 
 /*获取运行时钟周期，调用此函数在我本机实测消耗时间平均约为clock（）的十四分之一*/
@@ -149,13 +171,13 @@ int main()
 {
 	printf("all test start\n");
 
-	/*插入删除测试*/
+	/*插入、删除、获取所有元素测试*/
 	test_add_and_remove();
 
 	/*插入、查询性能测试(引用模式)*/
 	test_performance(REF_MODE);
 
-	/*插入、查询性能测试(拷贝模式)*/
+	/*拷贝模式*/
 	test_performance(COPY_MODE);
 
 	printf("all test end\n");

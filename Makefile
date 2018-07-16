@@ -1,5 +1,5 @@
-SRC = xxhash.c hashtable.c test_hash.c
-DEBUG =	-O0 -Wall -Wextra -ggdb
+SRC = error.h xxhash.c xxhash.h hashtable.c hashtable.h test_hash.c
+DEBUG =	-O2 -Wall -Wextra -ggdb
 SAMPLE = tar -xjf sample.tar.bz2
 SHELL_EXIST = $(shell if [ ! -e sample0.txt ]; then $(SAMPLE); fi;)
 
@@ -13,4 +13,4 @@ debug: $(SRC)
 	
 .PHONY: clean
 clean:
-	-rm test
+	-rm test debug -f
