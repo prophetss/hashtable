@@ -11,23 +11,21 @@ extern "C" {
 
 /*64位使用xx64，32位使用xx32*/
 #if defined(__x86_64__) || defined(_WIN64)
-#define TABLE_BITS          64
 #define XXHASH(a, b, c)     XXH64(a, b, c)
 #define hash_size_t         XXH64_hash_t
 #else
-#define TABLE_BITS          32
 #define hash_size_t         XXH32_hash_t
 #define XXHASH(a, b, c)     XXH32(a, b, c)
 #endif
 
 /*默认初始表容量*/
-#define DEFAULT_CAPACITY       	  4
+#define DEFAULT_CAPACITY        (1024*2048)
 
 /*
  * 负载因子，负载因子乘以表容量为实际最大可容纳元素数量值，
  * 超过此值就会发生表扩容
  */
-#define LOAD_FACTOR		     	0.75
+#define LOAD_FACTOR              (0.75)
 
 /* 
  * 表内添加value时的方式：引用模式value传入的方式为引用，
@@ -35,7 +33,6 @@ extern "C" {
  * 会释放表内value
  */
 typedef enum {REF_MODE = 0, COPY_MODE} table_mode_t;
-
 
 typedef struct hash_table_element hash_table_element_t;
 
@@ -62,9 +59,9 @@ typedef struct hash_table_element
 typedef struct hash_table
 {
 	/*
-	 * 初始表，参考redis哈希表分两个表以追求resize时负载均衡，
-	 * 当表扩容时会逐次将first表内没饿元素移至second，当全部
-     * 转移完后second表替换first表
+	 * 初始表，希表分两个表以追求resize时负载均衡，当表扩容时会逐
+	 * 次将first表内没饿元素移至second，当全部转移完后second表替
+     * 换first表
 	 */
     hash_table_element_t  **first_data_store;
 
@@ -74,43 +71,43 @@ typedef struct hash_table
      */
     hash_table_element_t  **second_data_store;
 
+    /* 表容量 */
+    hash_size_t table_capacity;
+
+	/* 当前表内key数量 */
+    hash_size_t key_count;
+
+    /*
+     * 表内最大key数量，其值等于table_capacity*LOAD_FACTOR，
+     * 当key_count大于等于此值时会扩容
+     */
+    hash_size_t max_key_count;
+
     /*
      * 记录指向first表中按顺序第一个key不为空的序号，扩容后
      * first表元素移至second表时使用
      */
-    size_t rehashidx;
-
-    /* 表容量 */
-    size_t table_capacity;
-
-	/* 当前表内key数量 */
-    size_t key_count;
-
-    /*
-     * 表内最大key数量，其值等于table_capacity*LOAD_FACTOR，当
-     * key_count大于等于此值是会扩容
-     */
-    size_t max_key_count;
+    hash_size_t rehashidx;
 
     /* 表内添加value时的方式：REF_MODE-为引用模式，COPY_MODE-为拷贝模式 */
     table_mode_t mode;
 
-    /* 
-     * 表容量对应xxhash结果偏移量，例如表容量为2的16次方，使
-     * 用xx64，则rdigits为64-16，下次hash结果直接左移rdigits
-     * 就为其实际hash值
-     */
-    unsigned char table_capacity_rdigits;
+    /* hash种子，默认为time(0) */
+    hash_size_t seed;
 
 } hash_table_t;
 
 
 
-/*以默认大小(DEFAULT_CAPACITY宏)创建hash表，失败返回NULL*/
-hash_table_t* hash_table_new(table_mode_t mode);
+/*表创建，n-表容量，lf-负载因子，mode-模式，表容量实际会向上扩至2的次幂*/
+hash_table_t* hash_table_new_n(size_t n, float lf, table_mode_t mode);
 
-/*以指定大小n创建hash表，失败返回NULL*/
-hash_table_t* hash_table_new_n(size_t n, table_mode_t mode);
+/*同上表创建，手动设置seed-哈希种子*/
+hash_table_t* hash_table_new_ns(size_t n, float lf, table_mode_t mode, hash_size_t seed);
+
+#define hash_table_new(mode)    hash_table_new_n(DEFAULT_CAPACITY, LOAD_FACTOR, mode)
+
+#define hash_table_new_s(mode, seed)    hash_table_new_ns(DEFAULT_CAPACITY, LOAD_FACTOR, mode, seed)
 
 /*删除表释放资源*/
 void hash_table_delete(hash_table_t *table);

@@ -7,7 +7,23 @@
 #include "hashtable.h"
 
 
-#define SAMPLE_SIZE	1024*1024
+//插入数据量
+#define SAMPLE_SIZE	1000000
+
+//随机生成每个key长度
+#define KEY_LEN 	8
+
+//随机随机生成每个value长度
+#define VALUE_LEN 	8
+
+//查询次数，必须是查询数量的整数倍
+#define LOOKUPS 	100000000
+
+//定义会计算每次调用时间和结果校验，打开会有10%到20的性能损失
+//#define DEBUG
+
+
+
 
 void test_add_and_remove()
 {
@@ -93,50 +109,42 @@ inline __u64 rdtsc()
 	return (__u64)hi << 32 | lo;
 }
 
-void test_performance(table_mode_t mode)
+void test_performance(table_mode_t mode, int capacity, float load_factory)
 {
 	const char *modes[2] = {"REF_MODE", "COPY_MODE"};
 
-	printf("%s performance test start\n", modes[mode]);
-	static char key[SAMPLE_SIZE][160];
-	static size_t klen[SAMPLE_SIZE];
-	static char value[SAMPLE_SIZE][16];
-	static size_t vlen[SAMPLE_SIZE];
-
+	FILE *f = fopen("/dev/urandom", "a+");
 	int i = 0;
-	/*读取样本数据，一共1,038,000条*/
-	for (int fn = 0; fn < 6; fn++) {
-		char fname[16];
-		sprintf(fname, "sample%d.txt", fn);
-		FILE *f = fopen(fname, "a+");
-		while (!feof(f)) {
-			char buf[256];
-			if (NULL == fgets(buf, 256, f)) {
-				return;
-			}
-			/*分别保存key-value和对应长度*/
-			sscanf(buf, "%*[^ ]%s %s", key[i], value[i]);
-			klen[i] = strlen(key[i]);
-			vlen[i] = strlen(value[i]);
-			i++;
+	static char key[SAMPLE_SIZE][KEY_LEN], value[SAMPLE_SIZE][VALUE_LEN];
+	while (!feof(f)) {
+		if (!fgets(key[i], KEY_LEN, f) || !fgets(value[i], VALUE_LEN, f)) {
+			continue;
 		}
-		fclose(f);
+		if (++i == SAMPLE_SIZE) {
+			break;
+		}
 	}
 
 	/*创建*/
-	hash_table_t *table = hash_table_new(mode);
+	hash_table_t *table = hash_table_new_n(capacity, load_factory, mode);
 
+	int x =0, y = 0;
 	/*添加*/
 	unsigned long long max = 0;
 	clock_t t0 = clock();
 	unsigned long long tlast = rdtsc(), tnext = tlast;
 	for (int j = 0; j < i; j++) {
+		#ifdef DEBUG
 		tlast = tnext;
-		hash_table_add(table, key[j], klen[j], value[j], vlen[j]);
+		#endif
+		int ret = hash_table_add(table, key[j], KEY_LEN, value[j], VALUE_LEN);
+		#ifdef DEBUG
+		if (ret == 1) x++;
 		tnext = rdtsc();
 		if (tnext - tlast > max) {
 			max = tnext - tlast;
 		}
+		#endif
 	}
 	clock_t t1 = clock();
 	double dt1 = (double)(t1 - t0) / CLOCKS_PER_SEC;
@@ -148,19 +156,25 @@ void test_performance(table_mode_t mode)
 	max = 0;
 	tlast = rdtsc();
 	tnext = tlast;
-	for (int k = 0; k < 100000000L; k++) {
+	for (int k = 0; k < LOOKUPS; k++) {
+		#ifdef DEBUG
 		tlast = tnext;
-		char *res = hash_table_lookup(table, key[k % i], klen[k % i]);
-		assert(memcmp(res, value[k % i], vlen[k % i]) == 0);
+		#endif
+		char *res = hash_table_lookup(table, key[k % i], KEY_LEN);
+		#ifdef DEBUG
+		if (memcmp(res, value[k % i], VALUE_LEN) != 0) ++y;
 		tnext = rdtsc();
 		if (tnext - tlast > max) {
 			max = tnext - tlast;
 		}
+		#endif
 	}
+	//当前，查询失败的次数/插入替换的次数应等于查询次数/插入个数，执行数次几乎可以保证无差错
+	assert(y == x*LOOKUPS/SAMPLE_SIZE);
 	clock_t t2 = clock();
 	double dt2 = (double)(t2 - t1) / CLOCKS_PER_SEC;
 	printf("lookup 100,000,000 times in %fs %fus on average, and the max simple time is %.2fus.\n",
-	       dt2, dt2 / 100, max / (double)(3200000000L / 1000000));
+	       dt2, dt2 * 1000000 / LOOKUPS, max / (double)(3200000000L / 1000000));
 
 	/*释放*/
 	hash_table_delete(table);
@@ -171,14 +185,14 @@ int main()
 {
 	printf("all test start\n");
 
-	/*插入、删除、获取所有元素测试*/
-	test_add_and_remove();
+	//不同的模式和起始表大小和负载因子
+	test_performance(COPY_MODE, 32, 0.75);
 
-	/*插入、查询性能测试(引用模式)*/
-	test_performance(REF_MODE);
+	test_performance(REF_MODE, 32, 0.75);
 
-	/*拷贝模式*/
-	test_performance(COPY_MODE);
+	test_performance(REF_MODE, 1, 10);
+
+	test_performance(REF_MODE, 1024*2048, 0.5);
 
 	printf("all test end\n");
 }
