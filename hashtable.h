@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 /*默认初始表容量*/
-#define DEFAULT_CAPACITY        (1024*2048)
+#define DEFAULT_CAPACITY        (32)
 
 /*
  * 负载因子，负载因子乘以表容量为实际最大可容纳元素数量值，
