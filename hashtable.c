@@ -148,10 +148,9 @@ void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len)
 	else {
 		temp[0] = table->first_data_store[hash & (table->table_capacity - 1)];
 	}
-	int r =0;
+
 	for (int i = 0; i < 2; ++i) {
 		while (temp[i]) {
-			r++;
 			if (key_compare(temp[i]->key, temp[i]->key_len, key, key_len)) {
 				return temp[i]->value;
 			}
