@@ -14,7 +14,7 @@
 /*key比较*/
 #define key_compare(key, key_len, key0, key0_len) ((key_len == key0_len) && !memcmp(key, key0, key_len))
 
-static unsigned char get_digits(size_t n)
+static unsigned char get_digits(hash_size_t n)
 {
 	unsigned char count = 0;
 	do {
@@ -57,9 +57,9 @@ static void element_delete(hash_table_t *table, hash_table_element_t *element)
 	free(element);
 }
 
-static void data_store_delete(hash_table_t *table, hash_table_element_t **data_store, const size_t capacity)
+static void data_store_delete(hash_table_t *table, hash_table_element_t **data_store, const hash_size_t capacity)
 {
-	for (size_t i = 0; i < capacity; i++) {
+	for (hash_size_t i = 0; i < capacity; i++) {
 		while (NULL != data_store[i]) {
 			hash_table_element_t *temp = data_store[i];
 			data_store[i] = data_store[i]->next;
@@ -68,12 +68,12 @@ static void data_store_delete(hash_table_t *table, hash_table_element_t **data_s
 	}
 }
 
-hash_table_t* hash_table_new_ns(size_t n, float lf, table_mode_t mode, hash_size_t seed)
+hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash_size_t seed)
 {
 	hash_table_t *new_hashtable = (hash_table_t*)malloc(sizeof(hash_table_t));
 	if (!new_hashtable) sys_exit_throw();
 	unsigned char digits = get_digits(n);
-	new_hashtable->table_capacity = (size_t)(1 << digits);
+	new_hashtable->table_capacity = (hash_size_t)(1 << digits);
 	new_hashtable->first_data_store = calloc(new_hashtable->table_capacity, sizeof(hash_table_element_t*));
 	if (!new_hashtable->first_data_store) sys_exit_throw();
 	new_hashtable->max_key_count = new_hashtable->table_capacity * lf;
@@ -85,7 +85,7 @@ hash_table_t* hash_table_new_ns(size_t n, float lf, table_mode_t mode, hash_size
 	return new_hashtable;
 }
 
-hash_table_t* hash_table_new_n(size_t n, float lf, table_mode_t mode)
+hash_table_t* hash_table_new_n(hash_size_t n, float lf, table_mode_t mode)
 {
 	return hash_table_new_ns(n, lf, mode, time(0));
 }
@@ -148,9 +148,10 @@ void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len)
 	else {
 		temp[0] = table->first_data_store[hash & (table->table_capacity - 1)];
 	}
-
+	int r =0;
 	for (int i = 0; i < 2; ++i) {
 		while (temp[i]) {
+			r++;
 			if (key_compare(temp[i]->key, temp[i]->key_len, key, key_len)) {
 				return temp[i]->value;
 			}
@@ -163,9 +164,12 @@ void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len)
 
 int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len)
 {
+	if (table->key_count >= table->max_key_count && NULL == table->second_data_store) {
+		hash_table_expand(table);
+	}
+
 	hash_size_t hash = XXHASH(key, key_len, table->seed);
 	hash_size_t shash_key = hash & (table->table_capacity - 1);
-
 	hash_table_element_t *temp[2] = {NULL};
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
 		temp[1] = table->second_data_store[shash_key];
@@ -173,10 +177,6 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 	}
 	else {
 		temp[0] = table->first_data_store[shash_key];
-	}
-
-	if (table->key_count >= table->max_key_count && NULL == table->second_data_store) {
-		hash_table_expand(table);
 	}
 
 	/*检索key发现相同替换返回1，否则加入链表末尾count+1返回0*/
@@ -222,8 +222,7 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 {
 	hash_size_t hash = XXHASH(key, key_len, table->seed);
-	hash_table_element_t *temp[2] = {NULL};
-	hash_table_element_t **ptemp[2] = {NULL};
+	hash_table_element_t *temp[2] = {NULL}, **ptemp[2] = {NULL};
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
 			if ((temp[0] = table->first_data_store[hash & (table->table_capacity / 2 - 1)])) {
 				ptemp[0] = &(table->first_data_store[hash & (table->table_capacity / 2 - 1)]);
@@ -260,32 +259,20 @@ int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 	return -1;
 }
 
-typedef void(*ELEM_FUNC)(hash_table_element_t **, hash_table_element_t *);
-
-static void elem_cpy(hash_table_element_t **p, hash_table_element_t *t)
+static void get_elements(hash_table_element_t **p, hash_table_element_t **data_store, hash_size_t n, table_mode_t mode)
 {
-	memcpy(*p, t, sizeof(hash_table_element_t));
-
-	(*p)->key = malloc(t->key_len);
-	if (!(*p)->key) sys_exit_throw();
-	memcpy((*p)->key, t->key, t->key_len);
-
-	(*p)->value = malloc(t->value_len);
-	if (!(*p)->value) sys_exit_throw();
-	memcpy((*p)->value, t->value, t->value_len);
-}
-
-static void elem_ref(hash_table_element_t **p, hash_table_element_t *t)
-{
-	memcpy(*p, t, sizeof(hash_table_element_t));
-}
-
-static void get_elements(hash_table_element_t **p, hash_table_element_t **data_store, size_t n, ELEM_FUNC elem_func)
-{
-	for (size_t i = 0; i < n; ++i) {
+	for (hash_size_t i = 0; i < n; ++i) {
 		hash_table_element_t *tmp = data_store[i];
 		while (tmp) {
-			elem_func(p, tmp);
+			memcpy(*p, tmp, sizeof(hash_table_element_t));
+			if (mode == COPY_MODE) {
+				(*p)->key = malloc(tmp->key_len);
+				if (!(*p)->key) sys_exit_throw();
+				memcpy((*p)->key, tmp->key, tmp->key_len);
+				(*p)->value = malloc(tmp->value_len);
+				if (!(*p)->value) sys_exit_throw();
+				memcpy((*p)->value, tmp->value, tmp->value_len);
+			}
 			tmp = tmp->next;
 			++(*p);
 		}
@@ -305,26 +292,16 @@ hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode
 	
 	hash_table_element_t *ptmp = head;
 
-	/*rehashidx为0表示second表为空*/
-	size_t sn = table->rehashidx != 0 ? table->table_capacity : 0;
+	hash_size_t sn = table->second_data_store ? table->table_capacity : 0;
 
 	/*second表不为空则first表大小为table_capacity/2*/
-	size_t fn = sn == 0 ? table->table_capacity : sn / 2;
-
-	/*不同模式传入不同函数*/
-	ELEM_FUNC elem_func;
-	if (mode == COPY_MODE) {
-		elem_func = elem_cpy;
-	}
-	else {
-		elem_func = elem_ref;
-	}
+	hash_size_t fn = sn == 0 ? table->table_capacity : sn / 2;
 
 	/*筛出first表元素*/
-	get_elements(&ptmp, table->first_data_store, fn, elem_func);
+	get_elements(&ptmp, table->first_data_store, fn, mode);
 
 	/*筛出second表元素*/
-	get_elements(&ptmp, table->second_data_store, sn, elem_func);
+	get_elements(&ptmp, table->second_data_store, sn, mode);
 
 	return head;
 }

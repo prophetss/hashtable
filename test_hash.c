@@ -23,17 +23,15 @@
 //#define DEBUG
 
 
-
-
-void test_add_and_remove()
+void test_all()
 {
 	printf("add,remove and get all elements test start\n");
-	hash_table_t *table = hash_table_new(REF_MODE);
+	hash_table_t *table = hash_table_new_n(REF_MODE, 4, 0.75);
 	//当前表容量设置为4负载因子为0.75，8条数据会有扩容发生
 	char* keys[] = {"Chinese Population", "India's Population", "American Population", "Indonesian Population",
-	"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population"};
+					"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population"};
 	unsigned long long values[] = {1400000000L, 1300000000L, 320000000L, 250000000L, 200000000L, 190000000L, 
-		180000000L, 160000000L};
+									180000000L, 160000000L};
 	int ret;
 	unsigned int i;
 	for (i = 0; i < sizeof(keys)/sizeof(char*); ++i) {
@@ -99,7 +97,7 @@ void test_add_and_remove()
 }
 
 /*获取运行时钟周期，调用此函数在我本机实测消耗时间平均约为clock（）的十四分之一*/
-inline __u64 rdtsc()
+__u64 rdtsc()
 {
 	__u32 lo, hi;
 	__asm__ __volatile__
@@ -109,7 +107,7 @@ inline __u64 rdtsc()
 	return (__u64)hi << 32 | lo;
 }
 
-void test_performance(table_mode_t mode, int capacity, float load_factory)
+void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor)
 {
 	const char *modes[2] = {"REF_MODE", "COPY_MODE"};
 
@@ -124,9 +122,10 @@ void test_performance(table_mode_t mode, int capacity, float load_factory)
 			break;
 		}
 	}
+	fclose(f);
 
 	/*创建*/
-	hash_table_t *table = hash_table_new_n(capacity, load_factory, mode);
+	hash_table_t *table = hash_table_new_n(capacity, load_factor, mode);
 
 	int x =0, y = 0;
 	/*添加*/
@@ -178,21 +177,26 @@ void test_performance(table_mode_t mode, int capacity, float load_factory)
 
 	/*释放*/
 	hash_table_delete(table);
-	printf("%s performance test end\n", modes[mode]);
+	printf("%s performance test end. capacity is %llu, load factor is %f\n\n", modes[mode], capacity, load_factor);
 }
 
 int main()
 {
 	printf("all test start\n");
 
-	//不同的模式和起始表大小和负载因子
+	for (int i = 0; i < 10000; ++i) {
+		test_all();
+	}
+
+	//不同的模式和起始表大小和负载因子,添加和查询性能测试
 	test_performance(COPY_MODE, 32, 0.75);
 
 	test_performance(REF_MODE, 32, 0.75);
 
-	test_performance(REF_MODE, 1, 10);
+	test_performance(REF_MODE, 32, 2);
 
-	test_performance(REF_MODE, 1024*2048, 0.5);
+	test_performance(REF_MODE, 32, 0.25);
+
 
 	printf("all test end\n");
 }

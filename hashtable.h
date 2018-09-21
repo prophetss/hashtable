@@ -22,8 +22,8 @@ extern "C" {
 #define DEFAULT_CAPACITY        (32)
 
 /*
- * 负载因子，负载因子乘以表容量为实际最大可容纳元素数量值，
- * 超过此值就会发生表扩容
+ * 负载因子，负载因子乘以表容量为实际最大可容纳元素数量值
+ * (应保证其大于等于1且为整数)，超过此值就会发生表扩容
  */
 #define LOAD_FACTOR              (0.75)
 
@@ -60,7 +60,7 @@ typedef struct hash_table
 {
 	/*
 	 * 初始表，希表分两个表以追求resize时负载均衡，当表扩容时会逐
-	 * 次将first表内没饿元素移至second，当全部转移完后second表替
+	 * 次将first表内元素移至second，当全部转移完后second表替
      * 换first表
 	 */
     hash_table_element_t  **first_data_store;
@@ -100,10 +100,10 @@ typedef struct hash_table
 
 
 /*表创建，n-表容量，lf-负载因子，mode-模式，表容量实际会向上扩至2的次幂*/
-hash_table_t* hash_table_new_n(size_t n, float lf, table_mode_t mode);
+hash_table_t* hash_table_new_n(hash_size_t n, float lf, table_mode_t mode);
 
 /*同上表创建，手动设置seed-哈希种子*/
-hash_table_t* hash_table_new_ns(size_t n, float lf, table_mode_t mode, hash_size_t seed);
+hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash_size_t seed);
 
 #define hash_table_new(mode)    hash_table_new_n(DEFAULT_CAPACITY, LOAD_FACTOR, mode)
 
