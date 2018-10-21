@@ -5,13 +5,16 @@
 #include <time.h>
 #include "hashtable.h"
 
+#if defined(_MSC_VER)
+#pragma warning(disable : 4996) //strerror _CRT_SECURE_NO_WARNINGS
+#endif //  defined(_MSC_VER)
 
-#define sys_exit_throw() do {                                                \
+#define sys_exit_throw() do {													\
     fprintf(stderr, "Errno : %d, msg : %s\n", errno, strerror(errno));          \
     exit(errno);                                                                \
 } while(0)
 
-/*keyæ¯”è¾ƒ*/
+/*key±È½Ï*/
 #define key_compare(key, key_len, key0, key0_len) ((key_len == key0_len) && !memcmp(key, key0, key_len))
 
 static unsigned char get_digits(hash_size_t n)
@@ -26,16 +29,16 @@ static unsigned char get_digits(hash_size_t n)
 static hash_table_element_t* element_new(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len)
 {
 	hash_table_element_t *element = (hash_table_element_t*)malloc(sizeof(hash_table_element_t));
-	if(!element) sys_exit_throw();
+	if (!element) sys_exit_throw();
 
 	element->key = malloc(key_len);
-	if(!element->key) sys_exit_throw();
+	if (!element->key) sys_exit_throw();
 
 	memcpy(element->key, key, key_len);
 
 	if (table->mode == COPY_MODE) {
 		element->value = malloc(value_len);
-		if(!element->value) sys_exit_throw();
+		if (!element->value) sys_exit_throw();
 		memcpy(element->value, value, value_len);
 	}
 	else {
@@ -74,9 +77,9 @@ hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash
 	if (!new_hashtable) sys_exit_throw();
 	unsigned char digits = get_digits(n);
 	new_hashtable->table_capacity = (hash_size_t)(1 << digits);
-	new_hashtable->first_data_store = calloc(new_hashtable->table_capacity, sizeof(hash_table_element_t*));
+	new_hashtable->first_data_store = (hash_table_element_t**)calloc(new_hashtable->table_capacity, sizeof(hash_table_element_t*));
 	if (!new_hashtable->first_data_store) sys_exit_throw();
-	new_hashtable->max_key_count = new_hashtable->table_capacity * lf;
+	new_hashtable->max_key_count = (hash_size_t)(new_hashtable->table_capacity * lf);
 	new_hashtable->second_data_store = NULL;
 	new_hashtable->rehashidx = 0;
 	new_hashtable->key_count = 0;
@@ -87,13 +90,13 @@ hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash
 
 hash_table_t* hash_table_new_n(hash_size_t n, float lf, table_mode_t mode)
 {
-	return hash_table_new_ns(n, lf, mode, time(0));
+	return hash_table_new_ns(n, lf, mode, (hash_size_t)time(0));
 }
 
 void hash_table_delete(hash_table_t *table)
 {
 	if (NULL != table->second_data_store) {
-		data_store_delete(table, &(table->first_data_store[table->rehashidx]), table->table_capacity/2 - table->rehashidx);
+		data_store_delete(table, &(table->first_data_store[table->rehashidx]), table->table_capacity / 2 - table->rehashidx);
 		data_store_delete(table, table->second_data_store, table->table_capacity);
 	}
 	else {
@@ -102,7 +105,7 @@ void hash_table_delete(hash_table_t *table)
 	free(table);
 }
 
-/*å°†firstè¡¨å†…ç›¸åŒhashçš„ä¸€ä¸ªå…ƒç´ è½¬ç§»è‡³secondè¡¨*/
+/*½«first±íÄÚÏàÍ¬hashµÄÒ»¸öÔªËØ×ªÒÆÖÁsecond±í*/
 static int move_element(hash_table_t *table)
 {
 	while (table->rehashidx < table->table_capacity / 2) {
@@ -111,15 +114,15 @@ static int move_element(hash_table_t *table)
 			table->rehashidx++;
 			continue;
 		}
-		/*é‡æ–°hashï¼Œæ’å…¥é“¾é¦–*/
-		hash_size_t rehash_key = (table->table_capacity-1) & XXHASH(ftemp->key, ftemp->key_len, table->seed);
+		/*ÖØĞÂhash£¬²åÈëÁ´Ê×*/
+		hash_size_t rehash_key = (table->table_capacity - 1) & XXHASH(ftemp->key, ftemp->key_len, table->seed);
 		hash_table_element_t *stemp = table->second_data_store[rehash_key];
 		table->second_data_store[rehash_key] = table->first_data_store[table->rehashidx];
 		table->first_data_store[table->rehashidx] = ftemp->next;
 		table->second_data_store[rehash_key]->next = stemp;
 		return 0;
 	}
-	/*å…¨éƒ¨è½¬ç§»å®Œæ¯•*/
+	/*È«²¿×ªÒÆÍê±Ï*/
 	free(table->first_data_store);
 	table->first_data_store = table->second_data_store;
 	table->second_data_store = NULL;
@@ -127,10 +130,10 @@ static int move_element(hash_table_t *table)
 	return 1;
 }
 
-/*åªè´Ÿè´£é‡æ–°å»ºè¡¨ï¼Œä¸è´Ÿè´£å…ƒç´ è½¬ç§»ã€‚åªæ‰©å¤§ï¼ˆç¿»å€ï¼‰ï¼Œä¸ç¼©å°*/
+/*Ö»¸ºÔğÖØĞÂ½¨±í£¬²»¸ºÔğÔªËØ×ªÒÆ¡£Ö»À©´ó£¨·­±¶£©£¬²»ËõĞ¡*/
 static void hash_table_expand(hash_table_t *table)
 {
-	table->second_data_store = calloc((table->table_capacity * 2), sizeof(hash_table_element_t*));
+	table->second_data_store = (hash_table_element_t**)calloc((table->table_capacity * 2), sizeof(hash_table_element_t*));
 	if (!table->second_data_store)  sys_exit_throw();
 	table->max_key_count *= 2;
 	table->table_capacity *= 2;
@@ -140,7 +143,7 @@ void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len)
 {
 	hash_size_t hash = XXHASH(key, key_len, table->seed);
 
-	hash_table_element_t *temp[2] = {NULL};
+	hash_table_element_t *temp[2] = { NULL };
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
 		temp[1] = table->second_data_store[hash & (table->table_capacity - 1)];
 		temp[0] = table->first_data_store[hash & (table->table_capacity / 2 - 1)];
@@ -169,7 +172,7 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 
 	hash_size_t hash = XXHASH(key, key_len, table->seed);
 	hash_size_t shash_key = hash & (table->table_capacity - 1);
-	hash_table_element_t *temp[2] = {NULL};
+	hash_table_element_t *temp[2] = { NULL };
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
 		temp[1] = table->second_data_store[shash_key];
 		temp[0] = table->first_data_store[hash & (table->table_capacity / 2 - 1)];
@@ -178,12 +181,12 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 		temp[0] = table->first_data_store[shash_key];
 	}
 
-	/*æ£€ç´¢keyå‘ç°ç›¸åŒæ›¿æ¢è¿”å›1ï¼Œå¦åˆ™åŠ å…¥é“¾è¡¨æœ«å°¾count+1è¿”å›0*/
+	/*¼ìË÷key·¢ÏÖÏàÍ¬Ìæ»»·µ»Ø1£¬·ñÔò¼ÓÈëÁ´±íÄ©Î²count+1·µ»Ø0*/
 	hash_table_element_t *prev = NULL;
 	for (int i = 0; i < 2; ++i) {
 		while (temp[i]) {
 			if (key_compare(temp[i]->key, temp[i]->key_len, key, key_len)) {
-				//æ›¿æ¢value
+				//Ìæ»»value
 				if (table->mode == COPY_MODE) {
 					free(temp[i]->value);
 					temp[i]->value = malloc(value_len);
@@ -200,7 +203,7 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 		}
 	}
 
-	//æœªæŸ¥åˆ°æ–°å»ºæ’å…¥
+	//Î´²éµ½ĞÂ½¨²åÈë
 	hash_table_element_t *element = element_new(table, key, key_len, value, value_len);
 	if (prev) {
 		prev->next = element;
@@ -221,14 +224,14 @@ int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, 
 int hash_table_remove(hash_table_t *table, void *key, size_t key_len)
 {
 	hash_size_t hash = XXHASH(key, key_len, table->seed);
-	hash_table_element_t *temp[2] = {NULL}, **ptemp[2] = {NULL};
+	hash_table_element_t *temp[2] = { NULL }, **ptemp[2] = { NULL };
 	if (NULL != table->second_data_store && 0 == move_element(table)) {
-			if ((temp[0] = table->first_data_store[hash & (table->table_capacity / 2 - 1)])) {
-				ptemp[0] = &(table->first_data_store[hash & (table->table_capacity / 2 - 1)]);
-			}
-			if ((temp[1] = table->second_data_store[hash & (table->table_capacity - 1)])) {
-				ptemp[1] = &(table->second_data_store[hash & (table->table_capacity - 1)]);
-			}
+		if ((temp[0] = table->first_data_store[hash & (table->table_capacity / 2 - 1)])) {
+			ptemp[0] = &(table->first_data_store[hash & (table->table_capacity / 2 - 1)]);
+		}
+		if ((temp[1] = table->second_data_store[hash & (table->table_capacity - 1)])) {
+			ptemp[1] = &(table->second_data_store[hash & (table->table_capacity - 1)]);
+		}
 	}
 	else {
 		if ((temp[0] = table->first_data_store[hash & (table->table_capacity - 1)])) {
@@ -280,26 +283,26 @@ static void get_elements(hash_table_element_t **p, hash_table_element_t **data_s
 
 hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode)
 {
-	/*è¡¨å†…æ— å…ƒç´ */
+	/*±íÄÚÎŞÔªËØ*/
 	if (0 == table->key_count) {
 		return NULL;
 	}
 
-	/*åˆ›å»ºè¿”å›åˆ—è¡¨*/
-	hash_table_element_t *head = calloc(table->key_count, sizeof(hash_table_element_t));
+	/*´´½¨·µ»ØÁĞ±í*/
+	hash_table_element_t *head = (hash_table_element_t*)calloc(table->key_count, sizeof(hash_table_element_t));
 	if (!head) sys_exit_throw();
-	
+
 	hash_table_element_t *ptmp = head;
 
 	hash_size_t sn = table->second_data_store ? table->table_capacity : 0;
 
-	/*secondè¡¨ä¸ä¸ºç©ºåˆ™firstè¡¨å¤§å°ä¸ºtable_capacity/2*/
+	/*second±í²»Îª¿ÕÔòfirst±í´óĞ¡Îªtable_capacity/2*/
 	hash_size_t fn = sn == 0 ? table->table_capacity : sn / 2;
 
-	/*ç­›å‡ºfirstè¡¨å…ƒç´ */
+	/*É¸³öfirst±íÔªËØ*/
 	get_elements(&ptmp, table->first_data_store, fn, mode);
 
-	/*ç­›å‡ºsecondè¡¨å…ƒç´ */
+	/*É¸³ösecond±íÔªËØ*/
 	get_elements(&ptmp, table->second_data_store, sn, mode);
 
 	return head;

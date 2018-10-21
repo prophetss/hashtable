@@ -9,7 +9,8 @@ extern "C" {
 
 #include "xxhash.h"
 
-/*64ä½ä½¿ç”¨xx64ï¼Œ32ä½ä½¿ç”¨xx32*/
+
+	/*64Î»Ê¹ÓÃxx64£¬32Î»Ê¹ÓÃxx32*/
 #if defined(__x86_64__) || defined(_WIN64)
 #define XXHASH(a, b, c)     XXH64(a, b, c)
 #define hash_size_t         XXH64_hash_t
@@ -18,114 +19,114 @@ extern "C" {
 #define XXHASH(a, b, c)     XXH32(a, b, c)
 #endif
 
-/*é»˜è®¤åˆå§‹è¡¨å®¹é‡*/
+	/*Ä¬ÈÏ³õÊ¼±íÈİÁ¿*/
 #define DEFAULT_CAPACITY        (32)
 
-/*
- * è´Ÿè½½å› å­ï¼Œè´Ÿè½½å› å­ä¹˜ä»¥è¡¨å®¹é‡ä¸ºå®é™…æœ€å¤§å¯å®¹çº³å…ƒç´ æ•°é‡å€¼
- * (åº”ä¿è¯å…¶å¤§äºç­‰äº1ä¸”ä¸ºæ•´æ•°)ï¼Œè¶…è¿‡æ­¤å€¼å°±ä¼šå‘ç”Ÿè¡¨æ‰©å®¹
- */
+	/*
+	* ¸ºÔØÒò×Ó£¬¸ºÔØÒò×Ó³ËÒÔ±íÈİÁ¿ÎªÊµ¼Ê×î´ó¿ÉÈİÄÉÔªËØÊıÁ¿Öµ
+	* (Ó¦±£Ö¤Æä´óÓÚµÈÓÚ1ÇÒÎªÕûÊı)£¬³¬¹ı´ËÖµ¾Í»á·¢Éú±íÀ©Èİ
+	*/
 #define LOAD_FACTOR              (0.75)
 
-/* 
- * è¡¨å†…æ·»åŠ valueæ—¶çš„æ–¹å¼ï¼šå¼•ç”¨æ¨¡å¼valueä¼ å…¥çš„æ–¹å¼ä¸ºå¼•ç”¨ï¼Œ
- * åˆ é™¤æ—¶ä¸ä¼šé‡Šæ”¾ï¼›æ‹·è´æ¨¡å¼å†…éƒ¨ç”³è¯·å†…å­˜æ‹·è´valueå€¼ï¼Œåˆ é™¤
- * ä¼šé‡Šæ”¾è¡¨å†…value
- */
-typedef enum {REF_MODE = 0, COPY_MODE} table_mode_t;
-
-typedef struct hash_table_element hash_table_element_t;
-
-typedef struct hash_table_element
-{
-	/* keyé•¿åº¦ */
-    size_t key_len;
-
-	/* valueé•¿åº¦ */
-    size_t value_len;
-
-    /* keyæ•°æ® */
-    void *key;
-
-    /* valueæ•°æ® */
-    void *value;
-
-    /* ä¸‹ä¸€ä¸ªç›¸åŒhashå€¼æ•°æ®ï¼Œæ‹‰é“¾æ³• */
-    hash_table_element_t *next;
-
-} hash_table_element_t;
-
-
-typedef struct hash_table
-{
 	/*
-	 * åˆå§‹è¡¨ï¼Œå¸Œè¡¨åˆ†ä¸¤ä¸ªè¡¨ä»¥è¿½æ±‚resizeæ—¶è´Ÿè½½å‡è¡¡ï¼Œå½“è¡¨æ‰©å®¹æ—¶ä¼šé€
-	 * æ¬¡å°†firstè¡¨å†…å…ƒç´ ç§»è‡³secondï¼Œå½“å…¨éƒ¨è½¬ç§»å®Œåsecondè¡¨æ›¿
-     * æ¢firstè¡¨
-	 */
-    hash_table_element_t  **first_data_store;
+	* ±íÄÚÌí¼ÓvalueÊ±µÄ·½Ê½£ºÒıÓÃÄ£Ê½value´«ÈëµÄ·½Ê½ÎªÒıÓÃ£¬
+	* É¾³ıÊ±²»»áÊÍ·Å£»¿½±´Ä£Ê½ÄÚ²¿ÉêÇëÄÚ´æ¿½±´valueÖµ£¬É¾³ı
+	* »áÊÍ·Å±íÄÚvalue
+	*/
+	typedef enum { REF_MODE = 0, COPY_MODE } table_mode_t;
 
-    /*
-     * åˆå§‹ä¸ºNULLï¼Œå‘ç”Ÿè¡¨æ‰©å®¹æ—¶äº§ç”Ÿï¼Œå¤§å°ä¸ºfirstè¡¨ä¸¤å€ï¼Œæ­¤å
-     * åœ¨æ’å…¥æŸ¥è¯¢åˆ é™¤æ—¶ä¼šé€ä¸ªå°†firstè¡¨ä¸­å…ƒç´ ç§»è‡³secondè¡¨ä¸­
-     */
-    hash_table_element_t  **second_data_store;
+	typedef struct hash_table_element hash_table_element_t;
 
-    /* è¡¨å®¹é‡ */
-    hash_size_t table_capacity;
+	typedef struct hash_table_element
+	{
+		/* key³¤¶È */
+		size_t key_len;
 
-	/* å½“å‰è¡¨å†…keyæ•°é‡ */
-    hash_size_t key_count;
+		/* value³¤¶È */
+		size_t value_len;
 
-    /*
-     * è¡¨å†…æœ€å¤§keyæ•°é‡ï¼Œå…¶å€¼ç­‰äºtable_capacity*LOAD_FACTORï¼Œ
-     * å½“key_countå¤§äºç­‰äºæ­¤å€¼æ—¶ä¼šæ‰©å®¹
-     */
-    hash_size_t max_key_count;
+		/* keyÊı¾İ */
+		void *key;
 
-    /*
-     * è®°å½•æŒ‡å‘firstè¡¨ä¸­æŒ‰é¡ºåºç¬¬ä¸€ä¸ªkeyä¸ä¸ºç©ºçš„åºå·ï¼Œæ‰©å®¹å
-     * firstè¡¨å…ƒç´ ç§»è‡³secondè¡¨æ—¶ä½¿ç”¨
-     */
-    hash_size_t rehashidx;
+		/* valueÊı¾İ */
+		void *value;
 
-    /* è¡¨å†…æ·»åŠ valueæ—¶çš„æ–¹å¼ï¼šREF_MODE-ä¸ºå¼•ç”¨æ¨¡å¼ï¼ŒCOPY_MODE-ä¸ºæ‹·è´æ¨¡å¼ */
-    table_mode_t mode;
+		/* ÏÂÒ»¸öÏàÍ¬hashÖµÊı¾İ£¬À­Á´·¨ */
+		hash_table_element_t *next;
 
-    /* hashç§å­ï¼Œé»˜è®¤ä¸ºtime(0) */
-    hash_size_t seed;
-
-} hash_table_t;
+	} hash_table_element_t;
 
 
+	typedef struct hash_table
+	{
+		/*
+		* ³õÊ¼±í£¬Ï£±í·ÖÁ½¸ö±íÒÔ×·ÇóresizeÊ±¸ºÔØ¾ùºâ£¬µ±±íÀ©ÈİÊ±»áÖğ
+		* ´Î½«first±íÄÚÔªËØÒÆÖÁsecond£¬µ±È«²¿×ªÒÆÍêºósecond±íÌæ
+		* »»first±í
+		*/
+		hash_table_element_t  **first_data_store;
 
-/*è¡¨åˆ›å»ºï¼Œn-è¡¨å®¹é‡ï¼Œlf-è´Ÿè½½å› å­ï¼Œmode-æ¨¡å¼ï¼Œè¡¨å®¹é‡å®é™…ä¼šå‘ä¸Šæ‰©è‡³2çš„æ¬¡å¹‚*/
-hash_table_t* hash_table_new_n(hash_size_t n, float lf, table_mode_t mode);
+		/*
+		* ³õÊ¼ÎªNULL£¬·¢Éú±íÀ©ÈİÊ±²úÉú£¬´óĞ¡Îªfirst±íÁ½±¶£¬´Ëºó
+		* ÔÚ²åÈë²éÑ¯É¾³ıÊ±»áÖğ¸ö½«first±íÖĞÔªËØÒÆÖÁsecond±íÖĞ
+		*/
+		hash_table_element_t  **second_data_store;
 
-/*åŒä¸Šè¡¨åˆ›å»ºï¼Œæ‰‹åŠ¨è®¾ç½®seed-å“ˆå¸Œç§å­*/
-hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash_size_t seed);
+		/* ±íÈİÁ¿ */
+		hash_size_t table_capacity;
 
-#define hash_table_new(mode)    hash_table_new_n(DEFAULT_CAPACITY, LOAD_FACTOR, mode)
+		/* µ±Ç°±íÄÚkeyÊıÁ¿ */
+		hash_size_t key_count;
 
-#define hash_table_new_s(mode, seed)    hash_table_new_ns(DEFAULT_CAPACITY, LOAD_FACTOR, mode, seed)
+		/*
+		* ±íÄÚ×î´ókeyÊıÁ¿£¬ÆäÖµµÈÓÚtable_capacity*LOAD_FACTOR£¬
+		* µ±key_count´óÓÚµÈÓÚ´ËÖµÊ±»áÀ©Èİ
+		*/
+		hash_size_t max_key_count;
 
-/*åˆ é™¤è¡¨é‡Šæ”¾èµ„æº*/
-void hash_table_delete(hash_table_t *table);
+		/*
+		* ¼ÇÂ¼Ö¸Ïòfirst±íÖĞ°´Ë³ĞòµÚÒ»¸ökey²»Îª¿ÕµÄĞòºÅ£¬À©Èİºó
+		* first±íÔªËØÒÆÖÁsecond±íÊ±Ê¹ÓÃ
+		*/
+		hash_size_t rehashidx;
 
-/*æ·»åŠ ï¼Œå¤±è´¥è¿”å›-1ï¼ŒæˆåŠŸè¿”å›0ï¼Œå‘ç”Ÿæ›¿æ¢è¿”å›1*/
-int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len);
+		/* ±íÄÚÌí¼ÓvalueÊ±µÄ·½Ê½£ºREF_MODE-ÎªÒıÓÃÄ£Ê½£¬COPY_MODE-Îª¿½±´Ä£Ê½ */
+		table_mode_t mode;
 
-/*åˆ é™¤ï¼Œå¤±è´¥è¿”å›-1ï¼ŒæˆåŠŸè¿”å›0*/
-int hash_table_remove(hash_table_t *table, void *key, size_t key_len);
+		/* hashÖÖ×Ó£¬Ä¬ÈÏÎªtime(0) */
+		hash_size_t seed;
 
-/*æŸ¥è¯¢ï¼ŒæˆåŠŸè¿”å›valueæŒ‡é’ˆï¼Œå¤±è´¥è¿”å›NULL*/
-void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len);
+	} hash_table_t;
 
-/*
- * è·å–hashè¡¨å†…æ‰€æœ‰å…ƒç´ ï¼ˆtable->key_countä¸ªå…ƒç´ ï¼‰ï¼Œè¿”å›å…ƒç´ æ•°ç»„åˆ—è¡¨ã€‚æ‹·è´æ¨¡å¼å¤åˆ¶æ•°æ®ï¼Œ
- * å¼•ç”¨æ¨¡å¼è¿”å›æŒ‡é’ˆæ•°ç»„ï¼ŒæŒ‡é’ˆæŒ‡å‘tableè¡¨å†…æ•°æ®ï¼Œç©ºè¡¨è¿”å›NULL
- */
-hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode);
+
+
+	/*±í´´½¨£¬n-±íÈİÁ¿£¬lf-¸ºÔØÒò×Ó£¬mode-Ä£Ê½£¬±íÈİÁ¿Êµ¼Ê»áÏòÉÏÀ©ÖÁ2µÄ´ÎÃİ*/
+	hash_table_t* hash_table_new_n(hash_size_t n, float lf, table_mode_t mode);
+
+	/*Í¬ÉÏ±í´´½¨£¬ÊÖ¶¯ÉèÖÃseed-¹şÏ£ÖÖ×Ó*/
+	hash_table_t* hash_table_new_ns(hash_size_t n, float lf, table_mode_t mode, hash_size_t seed);
+
+	#define hash_table_new(mode)    hash_table_new_n(DEFAULT_CAPACITY, LOAD_FACTOR, mode)
+
+	#define hash_table_new_s(mode, seed)    hash_table_new_ns(DEFAULT_CAPACITY, LOAD_FACTOR, mode, seed)
+
+	/*É¾³ı±íÊÍ·Å×ÊÔ´*/
+	void hash_table_delete(hash_table_t *table);
+
+	/*Ìí¼Ó£¬Ê§°Ü·µ»Ø-1£¬³É¹¦·µ»Ø0£¬·¢ÉúÌæ»»·µ»Ø1*/
+	int hash_table_add(hash_table_t *table, void *key, size_t key_len, void *value, size_t value_len);
+
+	/*É¾³ı£¬Ê§°Ü·µ»Ø-1£¬³É¹¦·µ»Ø0*/
+	int hash_table_remove(hash_table_t *table, void *key, size_t key_len);
+
+	/*²éÑ¯£¬³É¹¦·µ»ØvalueÖ¸Õë£¬Ê§°Ü·µ»ØNULL*/
+	void* hash_table_lookup(hash_table_t *table, void *key, size_t key_len);
+
+	/*
+	* »ñÈ¡hash±íÄÚËùÓĞÔªËØ£¨table->key_count¸öÔªËØ£©£¬·µ»ØÔªËØÊı×éÁĞ±í¡£¿½±´Ä£Ê½¸´ÖÆÊı¾İ£¬
+	* ÒıÓÃÄ£Ê½·µ»ØÖ¸ÕëÊı×é£¬Ö¸ÕëÖ¸Ïòtable±íÄÚÊı¾İ£¬¿Õ±í·µ»ØNULL
+	*/
+	hash_table_element_t* hash_table_elements(hash_table_t *table, table_mode_t mode);
 
 
 #if defined (__cplusplus)

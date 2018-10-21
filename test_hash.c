@@ -3,43 +3,49 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#if defined(_MSC_VER)
+#include "xxhash.h"
+#include <intrin.h>
+#pragma intrinsic(__rdtsc) 
+#else
 #include <linux/types.h>
+#endif //  defined(_MSC_VER)
 #include "hashtable.h"
 
 
-//æ’å…¥æ•°æ®é‡
+//²åÈëÊı¾İÁ¿
 #define SAMPLE_SIZE	1000000
 
-//éšæœºç”Ÿæˆæ¯ä¸ªkeyé•¿åº¦
+//Ëæ»úÉú³ÉÃ¿¸ökey³¤¶È
 #define KEY_LEN 	8
 
-//éšæœºéšæœºç”Ÿæˆæ¯ä¸ªvalueé•¿åº¦
+//Ëæ»úËæ»úÉú³ÉÃ¿¸övalue³¤¶È
 #define VALUE_LEN 	8
 
-//æŸ¥è¯¢æ¬¡æ•°ï¼Œå¿…é¡»æ˜¯æŸ¥è¯¢æ•°é‡çš„æ•´æ•°å€
+//²éÑ¯´ÎÊı£¬±ØĞëÊÇ²éÑ¯ÊıÁ¿µÄÕûÊı±¶
 #define LOOKUPS 	100000000
 
-//å®šä¹‰ä¼šè®¡ç®—æ¯æ¬¡è°ƒç”¨æ—¶é—´å’Œç»“æœæ ¡éªŒï¼Œæ‰“å¼€ä¼šæœ‰10%åˆ°20çš„æ€§èƒ½æŸå¤±
+//´ò¿ª»á¼ÆËãÃ¿´Îµ÷ÓÃÊ±¼äºÍ½á¹ûĞ£Ñé£¬´ò¿ª»áÓĞ10%µ½20µÄĞÔÄÜËğÊ§
 //#define DEBUG
 
 
 void test_all()
 {
 	printf("add,remove and get all elements test start\n");
-	hash_table_t *table = hash_table_new_n(REF_MODE, 4, 0.75);
-	//å½“å‰è¡¨å®¹é‡è®¾ç½®ä¸º4è´Ÿè½½å› å­ä¸º0.75ï¼Œ8æ¡æ•°æ®ä¼šæœ‰æ‰©å®¹å‘ç”Ÿ
-	char* keys[] = {"Chinese Population", "India's Population", "American Population", "Indonesian Population",
-					"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population"};
-	unsigned long long values[] = {1400000000L, 1300000000L, 320000000L, 250000000L, 200000000L, 190000000L, 
-									180000000L, 160000000L};
+	hash_table_t *table = hash_table_new_n(4, 0.75, REF_MODE);
+	//µ±Ç°±íÈİÁ¿ÉèÖÃÎª4¸ºÔØÒò×ÓÎª0.75£¬8ÌõÊı¾İ»áÓĞÀ©Èİ·¢Éú
+	char* keys[] = { "Chinese Population", "India's Population", "American Population", "Indonesian Population",
+		"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population" };
+	unsigned long long values[] = { 1400000000L, 1300000000L, 320000000L, 250000000L, 200000000L, 190000000L,
+		180000000L, 160000000L };
 	int ret;
 	unsigned int i;
-	for (i = 0; i < sizeof(keys)/sizeof(char*); ++i) {
+	for (i = 0; i < sizeof(keys) / sizeof(char*); ++i) {
 		ret = hash_table_add(table, keys[i], strlen(keys[i]), &values[i], sizeof(unsigned long long));
-		/*æ’å…¥æˆåŠŸ,æ— æ›¿æ¢,è¿”å›0*/
+		/*²åÈë³É¹¦,ÎŞÌæ»»,·µ»Ø0*/
 		if (ret == 0) {
-			/*æˆåŠŸåæŸ¥*/
-			char *res = hash_table_lookup(table, keys[i], strlen(keys[i]));
+			/*³É¹¦·´²é*/
+			char *res = (char*)hash_table_lookup(table, keys[i], strlen(keys[i]));
 			assert(memcmp(res, &values[i], sizeof(unsigned long long)) == 0);
 		}
 		else {
@@ -48,12 +54,12 @@ void test_all()
 		}
 	}
 
-	/*æ’å…¥ç›¸åŒkeyæ›¿æ¢value*/
+	/*²åÈëÏàÍ¬keyÌæ»»value*/
 	char new_value[] = "1.4B";
 	ret = hash_table_add(table, keys[0], strlen(keys[0]), new_value, sizeof(new_value));
-	/*æ’å…¥æˆåŠŸ,å‘ç”Ÿæ›¿æ¢,è¿”å›1*/
+	/*²åÈë³É¹¦,·¢ÉúÌæ»»,·µ»Ø1*/
 	if (ret == 1) {
-		char *res = hash_table_lookup(table, keys[0], strlen(keys[0]));
+		char *res = (char*)hash_table_lookup(table, keys[0], strlen(keys[0]));
 		assert(memcmp(res, new_value, sizeof(new_value)) == 0);
 	}
 	else {
@@ -63,10 +69,10 @@ void test_all()
 
 	printf("all of the add tests successfully. happy :) \n");
 
-	/*åˆ é™¤*/
+	/*É¾³ı*/
 	ret = hash_table_remove(table, keys[0], strlen(keys[0]));
 	if (ret == 0) {
-		char *res = hash_table_lookup(table, keys[0], strlen(keys[0]));
+		char *res = (char*)hash_table_lookup(table, keys[0], strlen(keys[0]));
 		if (NULL == res) {
 			printf("lookup result: value is null, remove successfully. happy :) \n");
 		}
@@ -80,40 +86,69 @@ void test_all()
 		return;
 	}
 
-	//è·å–æ‰€æœ‰å…ƒç´ 
+	//»ñÈ¡ËùÓĞÔªËØ
 	hash_table_element_t *all = hash_table_elements(table, COPY_MODE);
 	for (i = 0; i < table->key_count; ++i) {
 		assert(memcmp(hash_table_lookup(table, all[i].key, all[i].key_len), all[i].value, all[i].value_len) == 0);
-		//æ‹·è´æ¨¡å¼è°ƒç”¨è€…è´Ÿè´£é‡Šæ”¾
+		//¿½±´Ä£Ê½µ÷ÓÃÕß¸ºÔğÊÍ·Å
 		free(all[i].key);
 		free(all[i].value);
 	}
 	free(all);
 	printf("get all of elements successfully. happy :) \n");
-	
+
 	hash_table_delete(table);
 
 	printf("add,remove and get all elements test end\n\n");
 }
 
-/*è·å–è¿è¡Œæ—¶é’Ÿå‘¨æœŸï¼Œè°ƒç”¨æ­¤å‡½æ•°åœ¨æˆ‘æœ¬æœºå®æµ‹æ¶ˆè€—æ—¶é—´å¹³å‡çº¦ä¸ºclockï¼ˆï¼‰çš„åå››åˆ†ä¹‹ä¸€*/
+/*»ñÈ¡ÔËĞĞÊ±ÖÓÖÜÆÚ£¬±Èclock()¿ìÒ»¸öÊıÁ¿¼¶*/
+#if defined(_MSC_VER)
+#define rdtsc()	__rdtsc()
+#else
 __u64 rdtsc()
 {
 	__u32 lo, hi;
 	__asm__ __volatile__
-	(
-	    "rdtsc":"=a"(lo), "=d"(hi)
-	);
+		(
+			"rdtsc":"=a"(lo), "=d"(hi)
+			);
 	return (__u64)hi << 32 | lo;
 }
+#endif //  defined(_MSC_VER)
 
 void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor)
 {
-	const char *modes[2] = {"REF_MODE", "COPY_MODE"};
+	const char *modes[2] = { "REF_MODE", "COPY_MODE" };
 
-	FILE *f = fopen("/dev/urandom", "a+");
-	int i = 0;
 	static char key[SAMPLE_SIZE][KEY_LEN], value[SAMPLE_SIZE][VALUE_LEN];
+
+	int i = 0;
+
+#if defined(_WIN32) || defined(_WIN32_WCE)
+#define HASH_LEN	sizeof(hash_size_t)
+	//»ùÓÚxxhashÉú³ÉËæ»ú×Ö·û´®
+	hash_size_t h, j;
+	for (; i < SAMPLE_SIZE; ++i) {
+		j = KEY_LEN;
+		while (j > HASH_LEN) {
+			h = XXHASH(&j, HASH_LEN, rdtsc());
+			memcpy(&key[i][KEY_LEN - j], &h, HASH_LEN);
+			j -= HASH_LEN;
+		}
+		h = XXHASH(&j, HASH_LEN, rdtsc());
+		memcpy(&key[i][KEY_LEN - j], &h, j);
+		j = VALUE_LEN;
+		while (j > HASH_LEN) {
+			h = XXHASH(&j, HASH_LEN, rdtsc());
+			memcpy(&key[i][VALUE_LEN - j], &h, HASH_LEN);
+			j -= HASH_LEN;
+		}
+		h = XXHASH(&j, HASH_LEN, rdtsc());
+		memcpy(&key[i][VALUE_LEN - j], &h, j);
+	}
+#else
+	FILE *f = fopen("/dev/urandom", "a+");
 	while (!feof(f)) {
 		if (!fgets(key[i], KEY_LEN, f) || !fgets(value[i], VALUE_LEN, f)) {
 			continue;
@@ -123,59 +158,60 @@ void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor
 		}
 	}
 	fclose(f);
+#endif //  defined(_WIN32) || defined(_WIN32_WCE)
 
-	/*åˆ›å»º*/
+	/*´´½¨*/
 	hash_table_t *table = hash_table_new_n(capacity, load_factor, mode);
 
-	int x =0, y = 0;
-	/*æ·»åŠ */
+	hash_size_t x = 0, y = 0;
+	/*Ìí¼Ó*/
 	unsigned long long max = 0;
 	clock_t t0 = clock();
 	unsigned long long tlast = rdtsc(), tnext = tlast;
 	for (int j = 0; j < i; j++) {
-		#ifdef DEBUG
+#ifdef DEBUG
 		tlast = tnext;
-		#endif
+#endif
 		int ret = hash_table_add(table, key[j], KEY_LEN, value[j], VALUE_LEN);
-		#ifdef DEBUG
+#ifdef DEBUG
 		if (ret == 1) x++;
 		tnext = rdtsc();
 		if (tnext - tlast > max) {
 			max = tnext - tlast;
 		}
-		#endif
+#endif
 	}
 	clock_t t1 = clock();
 	double dt1 = (double)(t1 - t0) / CLOCKS_PER_SEC;
-	/*ä¸‹é¢3.2Gæ˜¯æˆ‘çš„ç”µè„‘çš„ä¸»é¢‘ï¼Œè‡ªå·±æ ¹æ®è‡ªå·±ç”µè„‘ä¿®æ”¹ï¼Œ1000000æ˜¯å°†sè½¬åŒ–ä¸ºus*/
-	printf("add %d keys in %fs %fus on average, and the max simple time is %.2fus.\n",
-	       i, dt1, dt1 * 1000000 / i, max / (double)(3200000000L / 1000000));
+	/*ÏÂÃæ3.2GÊÇÎÒµÄµçÄÔµÄÖ÷Æµ£¬×Ô¼º¸ù¾İ×Ô¼ºµçÄÔĞŞ¸Ä£¬1000000ÊÇ½«s×ª»¯Îªus*/
+	printf("add %d keys in %fs, %fus on average, and the max simple time is %.2fus.\n",
+		i, dt1, dt1 * 1000000 / i, max / (double)(3200000000L / 1000000));
 
-	/*æŸ¥è¯¢*/
+	/*²éÑ¯*/
 	max = 0;
 	tlast = rdtsc();
 	tnext = tlast;
 	for (int k = 0; k < LOOKUPS; k++) {
-		#ifdef DEBUG
+#ifdef DEBUG
 		tlast = tnext;
-		#endif
-		char *res = hash_table_lookup(table, key[k % i], KEY_LEN);
-		#ifdef DEBUG
+#endif
+		char *res = (char*)hash_table_lookup(table, key[k % i], KEY_LEN);
+#ifdef DEBUG
 		if (memcmp(res, value[k % i], VALUE_LEN) != 0) ++y;
 		tnext = rdtsc();
 		if (tnext - tlast > max) {
 			max = tnext - tlast;
 		}
-		#endif
+#endif
 	}
-	//å½“å‰ï¼ŒæŸ¥è¯¢å¤±è´¥çš„æ¬¡æ•°/æ’å…¥æ›¿æ¢çš„æ¬¡æ•°åº”ç­‰äºæŸ¥è¯¢æ¬¡æ•°/æ’å…¥ä¸ªæ•°ï¼Œæ‰§è¡Œæ•°æ¬¡å‡ ä¹å¯ä»¥ä¿è¯æ— å·®é”™
-	assert(y == x*LOOKUPS/SAMPLE_SIZE);
+	//µ±Ç°£¬²éÑ¯Ê§°ÜµÄ´ÎÊı/²åÈëÌæ»»µÄ´ÎÊıÓ¦µÈÓÚ²éÑ¯´ÎÊı/²åÈë¸öÊı£¬Ö´ĞĞÊı´Î¼¸ºõ¿ÉÒÔ±£Ö¤ÎŞ²î´í
+	assert(y == x*(LOOKUPS / SAMPLE_SIZE));
 	clock_t t2 = clock();
 	double dt2 = (double)(t2 - t1) / CLOCKS_PER_SEC;
-	printf("lookup 100,000,000 times in %fs %fus on average, and the max simple time is %.2fus.\n",
-	       dt2, dt2 * 1000000 / LOOKUPS, max / (double)(3200000000L / 1000000));
+	printf("lookup 100,000,000 times in %fs, %fus on average, and the max simple time is %.2fus.\n",
+		dt2, dt2 * 1000000 / LOOKUPS, max / (double)(3200000000L / 1000000));
 
-	/*é‡Šæ”¾*/
+	/*ÊÍ·Å*/
 	hash_table_delete(table);
 	printf("%s performance test end. capacity is %llu, load factor is %f\n\n", modes[mode], capacity, load_factor);
 }
@@ -188,7 +224,7 @@ int main()
 		test_all();
 	}
 
-	//ä¸åŒçš„æ¨¡å¼å’Œèµ·å§‹è¡¨å¤§å°å’Œè´Ÿè½½å› å­,æ·»åŠ å’ŒæŸ¥è¯¢æ€§èƒ½æµ‹è¯•
+	//²»Í¬µÄÄ£Ê½ºÍÆğÊ¼±í´óĞ¡ºÍ¸ºÔØÒò×Ó,Ìí¼ÓºÍ²éÑ¯ĞÔÄÜ²âÊÔ
 	test_performance(COPY_MODE, 32, 0.75);
 
 	test_performance(REF_MODE, 32, 0.75);
