@@ -4,11 +4,13 @@
 #include <time.h>
 #include <assert.h>
 #if defined(_MSC_VER)
-#include "xxhash.h"
-#include <intrin.h>
+#include "xxhash.h"	//random string
+#include <windows.h> //sleep
+#include <intrin.h>	//rdtsc
 #pragma intrinsic(__rdtsc) 
 #else
-#include <linux/types.h>
+#include <linux/types.h>	//rdtsc
+#include <unistd.h>	//sleep
 #endif //  defined(_MSC_VER)
 #include "hashtable.h"
 
@@ -29,10 +31,26 @@
 //#define DEBUG
 
 
+/*获取运行时钟周期，比clock()快一个数量级*/
+#if defined(_MSC_VER)
+#define rdtsc()	__rdtsc()
+#define sleep(t)	Sleep(t*1000)
+#else
+__u64 rdtsc()
+{
+	__u32 lo, hi;
+	__asm__ __volatile__
+		(
+			"rdtsc":"=a"(lo), "=d"(hi)
+			);
+	return (__u64)hi << 32 | lo;
+}
+#endif //  defined(_MSC_VER)
+
 void test_all()
 {
 	printf("add,remove and get all elements test start\n");
-	hash_table_t *table = hash_table_new_n(4, 0.75, REF_MODE);
+	hash_table_t *table = hash_table_new_ns(4, 0.75, REF_MODE, rdtsc());
 	//当前表容量设置为4负载因子为0.75，8条数据会有扩容发生
 	char* keys[] = { "Chinese Population", "India's Population", "American Population", "Indonesian Population",
 		"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population" };
@@ -102,25 +120,16 @@ void test_all()
 	printf("add,remove and get all elements test end\n\n");
 }
 
-/*获取运行时钟周期，比clock()快一个数量级*/
-#if defined(_MSC_VER)
-#define rdtsc()	__rdtsc()
-#else
-__u64 rdtsc()
+//获取电脑主频，有一定误差，实测低于1%
+unsigned long long get_dominant_frequency()
 {
-	__u32 lo, hi;
-	__asm__ __volatile__
-		(
-			"rdtsc":"=a"(lo), "=d"(hi)
-			);
-	return (__u64)hi << 32 | lo;
+	unsigned long long t1 = rdtsc();
+	sleep(1);
+	return rdtsc() - t1;
 }
-#endif //  defined(_MSC_VER)
 
 void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor)
 {
-	const char *modes[2] = { "REF_MODE", "COPY_MODE" };
-
 	static char key[SAMPLE_SIZE][KEY_LEN], value[SAMPLE_SIZE][VALUE_LEN];
 
 	int i = 0;
@@ -128,24 +137,18 @@ void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor
 #if defined(_WIN32) || defined(_WIN32_WCE)
 #define HASH_LEN	sizeof(hash_size_t)
 	//基于xxhash生成随机字符串
-	hash_size_t h, j;
-	for (; i < SAMPLE_SIZE; ++i) {
-		j = KEY_LEN;
-		while (j > HASH_LEN) {
+	hash_size_t h, j, k = 0, lens[2] = {KEY_LEN, VALUE_LEN};
+	for (; k < 2; ++k) {
+		for (; i < SAMPLE_SIZE; ++i) {
+			j = lens[k];
+			while (j > HASH_LEN) {
+				h = XXHASH(&j, HASH_LEN, rdtsc());
+				memcpy(&key[i][lens[k] - j], &h, HASH_LEN);
+				j -= HASH_LEN;
+			}
 			h = XXHASH(&j, HASH_LEN, rdtsc());
-			memcpy(&key[i][KEY_LEN - j], &h, HASH_LEN);
-			j -= HASH_LEN;
+			memcpy(&key[i][lens[k] - j], &h, j);
 		}
-		h = XXHASH(&j, HASH_LEN, rdtsc());
-		memcpy(&key[i][KEY_LEN - j], &h, j);
-		j = VALUE_LEN;
-		while (j > HASH_LEN) {
-			h = XXHASH(&j, HASH_LEN, rdtsc());
-			memcpy(&key[i][VALUE_LEN - j], &h, HASH_LEN);
-			j -= HASH_LEN;
-		}
-		h = XXHASH(&j, HASH_LEN, rdtsc());
-		memcpy(&key[i][VALUE_LEN - j], &h, j);
 	}
 #else
 	FILE *f = fopen("/dev/urandom", "a+");
@@ -183,9 +186,9 @@ void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor
 	}
 	clock_t t1 = clock();
 	double dt1 = (double)(t1 - t0) / CLOCKS_PER_SEC;
-	/*下面3.2G是我的电脑的主频，自己根据自己电脑修改，1000000是将s转化为us*/
+	/*1000000是将s转化为us*/
 	printf("add %d keys in %fs, %fus on average, and the max simple time is %.2fus.\n",
-		i, dt1, dt1 * 1000000 / i, max / (double)(3200000000L / 1000000));
+		i, dt1, dt1 * 1000000 / i, max / (double)(get_dominant_frequency() / 1000000));
 
 	/*查询*/
 	max = 0;
@@ -209,10 +212,12 @@ void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor
 	clock_t t2 = clock();
 	double dt2 = (double)(t2 - t1) / CLOCKS_PER_SEC;
 	printf("lookup 100,000,000 times in %fs, %fus on average, and the max simple time is %.2fus.\n",
-		dt2, dt2 * 1000000 / LOOKUPS, max / (double)(3200000000L / 1000000));
+		dt2, dt2 * 1000000 / LOOKUPS, max / (double)(get_dominant_frequency() / 1000000));
 
 	/*释放*/
 	hash_table_delete(table);
+
+	const static char *modes[2] = { "REF_MODE", "COPY_MODE" };
 	printf("%s performance test end. capacity is %llu, load factor is %f\n\n", modes[mode], capacity, load_factor);
 }
 
@@ -221,6 +226,7 @@ int main()
 	printf("all test start\n");
 
 	for (int i = 0; i < 10000; ++i) {
+		//每次都是随机种子
 		test_all();
 	}
 
@@ -232,7 +238,6 @@ int main()
 	test_performance(REF_MODE, 32, 2);
 
 	test_performance(REF_MODE, 32, 0.25);
-
 
 	printf("all test end\n");
 }
