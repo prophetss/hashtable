@@ -15,23 +15,29 @@
 #include "hashtable.h"
 
 
+#if defined(__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */)
+# include <stdint.h>
+typedef uint64_t U64;
+#else
+typedef unsigned long long  U64;
+#endif
+
+
 //插入数据量
 #define SAMPLE_SIZE	1000000
 
 //随机生成每个key长度
-#define KEY_LEN 	8
+#define KEY_LEN 	16
 
 //随机随机生成每个value长度
-#define VALUE_LEN 	8
+#define VALUE_LEN 	16
 
-//查询次数，必须是查询数量的整数倍
-#define LOOKUPS 	100000000
-
-//打开会计算每次调用时间和结果校验，打开会有10%到20的性能损失
+//打开会计算每次调用时间和每次结果校验（负载均衡测试），打开会有10%到20的性能损失
+#ifndef DEBUG
 //#define DEBUG
+#endif // !DEBUG
 
-
-/*获取运行时钟周期，比clock()快一个数量级*/
+/*获取运行时钟周期，比clock()快至少一个数量级*/
 #if defined(_MSC_VER)
 #define rdtsc()	__rdtsc()
 #define sleep(t)	Sleep(t*1000)
@@ -47,99 +53,23 @@ __u64 rdtsc()
 }
 #endif //  defined(_MSC_VER)
 
-void test_all()
-{
-	printf("add,remove and get all elements test start\n");
-	hash_table_t *table = hash_table_new_ns(4, 0.75, REF_MODE, rdtsc());
-	//当前表容量设置为4负载因子为0.75，8条数据会有扩容发生
-	char* keys[] = { "Chinese Population", "India's Population", "American Population", "Indonesian Population",
-		"Brazil Population", "Pakistan Population", "Nigerian Population", "Bangladeshi Population" };
-	unsigned long long values[] = { 1400000000L, 1300000000L, 320000000L, 250000000L, 200000000L, 190000000L,
-		180000000L, 160000000L };
-	int ret;
-	unsigned int i;
-	for (i = 0; i < sizeof(keys) / sizeof(char*); ++i) {
-		ret = hash_table_add(table, keys[i], strlen(keys[i]), &values[i], sizeof(unsigned long long));
-		/*插入成功,无替换,返回0*/
-		if (ret == 0) {
-			/*成功反查*/
-			char *res = (char*)hash_table_lookup(table, keys[i], strlen(keys[i]));
-			assert(memcmp(res, &values[i], sizeof(unsigned long long)) == 0);
-		}
-		else {
-			printf("failed to add a value. sad :( \n");
-			return;
-		}
-	}
-
-	/*插入相同key替换value*/
-	char new_value[] = "1.4B";
-	ret = hash_table_add(table, keys[0], strlen(keys[0]), new_value, sizeof(new_value));
-	/*插入成功,发生替换,返回1*/
-	if (ret == 1) {
-		char *res = (char*)hash_table_lookup(table, keys[0], strlen(keys[0]));
-		assert(memcmp(res, new_value, sizeof(new_value)) == 0);
-	}
-	else {
-		printf("failed to change a value. sad :( \n");
-		return;
-	}
-
-	printf("all of the add tests successfully. happy :) \n");
-
-	/*删除*/
-	ret = hash_table_remove(table, keys[0], strlen(keys[0]));
-	if (ret == 0) {
-		char *res = (char*)hash_table_lookup(table, keys[0], strlen(keys[0]));
-		if (NULL == res) {
-			printf("lookup result: value is null, remove successfully. happy :) \n");
-		}
-		else {
-			printf("lookup result: value is not null, coding bugs. very sad :( :( :( \n");
-			return;
-		}
-	}
-	else {
-		printf("failed to remove. sad :( \n");
-		return;
-	}
-
-	//获取所有元素
-	hash_table_element_t *all = hash_table_elements(table, COPY_MODE);
-	for (i = 0; i < table->key_count; ++i) {
-		assert(memcmp(hash_table_lookup(table, all[i].key, all[i].key_len), all[i].value, all[i].value_len) == 0);
-		//拷贝模式调用者负责释放
-		free(all[i].key);
-		free(all[i].value);
-	}
-	free(all);
-	printf("get all of elements successfully. happy :) \n");
-
-	hash_table_delete(table);
-
-	printf("add,remove and get all elements test end\n\n");
-}
-
 //获取电脑主频，有一定误差，实测低于1%
-unsigned long long get_dominant_frequency()
+U64 get_dominant_frequency()
 {
-	unsigned long long t1 = rdtsc();
+	U64 t1 = rdtsc();
 	sleep(1);
 	return rdtsc() - t1;
 }
 
-void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor)
+void data_gen(char key[][KEY_LEN], char val[][VALUE_LEN], int size)
 {
-	static char key[SAMPLE_SIZE][KEY_LEN], value[SAMPLE_SIZE][VALUE_LEN];
-
 	int i = 0;
-
 #if defined(_WIN32) || defined(_WIN32_WCE)
 #define HASH_LEN	sizeof(hash_size_t)
 	//基于xxhash生成随机字符串
-	hash_size_t h, j, k = 0, lens[2] = {KEY_LEN, VALUE_LEN};
+	hash_size_t h, j, k = 0, lens[2] = { KEY_LEN, VALUE_LEN };
 	for (; k < 2; ++k) {
-		for (; i < SAMPLE_SIZE; ++i) {
+		for (; i < size; ++i) {
 			j = lens[k];
 			while (j > HASH_LEN) {
 				h = XXHASH(&j, HASH_LEN, rdtsc());
@@ -151,93 +81,102 @@ void test_performance(table_mode_t mode, hash_size_t capacity, float load_factor
 		}
 	}
 #else
-	FILE *f = fopen("/dev/urandom", "a+");
-	while (!feof(f)) {
-		if (!fgets(key[i], KEY_LEN, f) || !fgets(value[i], VALUE_LEN, f)) {
-			continue;
-		}
-		if (++i == SAMPLE_SIZE) {
-			break;
-		}
+	FILE* f = fopen("/dev/urandom", "r");
+	while (i != size) {
+		if (!fgets(key[i], KEY_LEN, f) || !fgets(val[i], VALUE_LEN, f))	continue;
+		i++;
 	}
 	fclose(f);
 #endif //  defined(_WIN32) || defined(_WIN32_WCE)
+}
 
+void test_performance(table_mode_t mode)
+{
+	static char key[SAMPLE_SIZE][KEY_LEN], value[SAMPLE_SIZE][VALUE_LEN];
+	const double DOMINANT_FREQUENCY = (double)get_dominant_frequency();
+	//获取随机数据
+	data_gen(key, value, SAMPLE_SIZE);
+	
 	/*创建*/
-	hash_table_t *table = hash_table_new_n(capacity, load_factor, mode);
-
-	hash_size_t x = 0, y = 0;
+	hash_table_t* table = htnew(mode);
 	/*添加*/
-	unsigned long long max = 0;
-	clock_t t0 = clock();
-	unsigned long long tlast = rdtsc(), tnext = tlast;
-	for (int j = 0; j < i; j++) {
 #ifdef DEBUG
-		tlast = tnext;
+	const char ZEROS[VALUE_LEN] = { 0 };
+	U64 max_time = 0, tlast, t0 = rdtsc();
+#else
+	U64 max_time = 0, t0 = rdtsc();
 #endif
-		int ret = hash_table_add(table, key[j], KEY_LEN, value[j], VALUE_LEN);
+	int i;
+	for ( i = 0;i < SAMPLE_SIZE; i++) {
 #ifdef DEBUG
-		if (ret == 1) x++;
-		tnext = rdtsc();
-		if (tnext - tlast > max) {
-			max = tnext - tlast;
-		}
+		tlast = rdtsc();
+		if (0 != htsetnx(table, key[i], KEY_LEN, value[i], VALUE_LEN))	memset(value[i], 0, VALUE_LEN);	// 出现重复value全置0记录
+		tlast = rdtsc() - tlast;
+		if (tlast > max_time) max_time = tlast;
+#else
+		htsetnx(table, key[i], KEY_LEN, value[i], VALUE_LEN);
 #endif
 	}
-	clock_t t1 = clock();
-	double dt1 = (double)(t1 - t0) / CLOCKS_PER_SEC;
-	/*1000000是将s转化为us*/
-	printf("add %d keys in %fs, %fus on average, and the max simple time is %.2fus.\n",
-		i, dt1, dt1 * 1000000 / i, max / (double)(get_dominant_frequency() / 1000000));
+	double t = (double)(rdtsc() - t0) / DOMINANT_FREQUENCY;
+	printf("add %d keys in %fs, %fus on average, and the max simple time is %fus.\n",i, t, t * 1000000 / i, (double)max_time * 1000000 / DOMINANT_FREQUENCY);
 
 	/*查询*/
-	max = 0;
-	tlast = rdtsc();
-	tnext = tlast;
-	for (int k = 0; k < LOOKUPS; k++) {
+	max_time = 0;
+	t0 = rdtsc();
+	for (i = 0; i < SAMPLE_SIZE; i++) {
 #ifdef DEBUG
-		tlast = tnext;
-#endif
-		char *res = (char*)hash_table_lookup(table, key[k % i], KEY_LEN);
-#ifdef DEBUG
-		if (memcmp(res, value[k % i], VALUE_LEN) != 0) ++y;
-		tnext = rdtsc();
-		if (tnext - tlast > max) {
-			max = tnext - tlast;
-		}
+		tlast = rdtsc();
+		char* res = (char*)htget(table, key[i], KEY_LEN);
+		tlast = rdtsc() - tlast;
+		if (tlast > max_time) max_time = tlast;
+		assert(res && (!memcmp(res, value[i], VALUE_LEN) || !memcmp(value[i], ZEROS, VALUE_LEN)));
+#else
+		htget(table, key[i], KEY_LEN);
 #endif
 	}
-	//当前，查询失败的次数/插入替换的次数应等于查询次数/插入个数，执行数次几乎可以保证无差错
-	assert(y == x*(LOOKUPS / SAMPLE_SIZE));
-	clock_t t2 = clock();
-	double dt2 = (double)(t2 - t1) / CLOCKS_PER_SEC;
-	printf("lookup 100,000,000 times in %fs, %fus on average, and the max simple time is %.2fus.\n",
-		dt2, dt2 * 1000000 / LOOKUPS, max / (double)(get_dominant_frequency() / 1000000));
+	t = (double)(rdtsc() - t0) / DOMINANT_FREQUENCY;
+	printf("lookup %d times in %fs, %fus on average, and the max simple time is %fus.\n",i, t, t * 1000000 / i, (double)max_time * 1000000 / DOMINANT_FREQUENCY);
+	
+	/*获取所有元素*/
+	t0 = rdtsc();
+	htgetall(table, REF_MODE);
+	printf("get all of elements in %fs\n", (double)(rdtsc() - t0) / DOMINANT_FREQUENCY);
 
+	/*全部元素重新哈希*/
+	t0 = rdtsc();
+	htrh(table, t0);
+	printf("rehashing in %fs\n", (double)(rdtsc() - t0) / DOMINANT_FREQUENCY);
+
+	/*删除*/
+	max_time = 0;
+	t0 = rdtsc();
+	for (i = 0; i < SAMPLE_SIZE; i++) {
+#ifdef DEBUG
+		tlast = rdtsc();
+		int ret = htrm(table, key[i], KEY_LEN);
+		tlast = rdtsc() - tlast;
+		if (tlast > max_time) max_time = tlast;
+		assert((ret == 0 && !htget(table, key[i], KEY_LEN)) || !memcmp(value[i], ZEROS, VALUE_LEN));
+#else
+		hash_table_remove(table, key[i], KEY_LEN);
+#endif
+	}
+	t = (double)(rdtsc() - t0) / DOMINANT_FREQUENCY;
+	printf("remove %d times in %fs, %fus on average, and the max simple time is %fus.\n", i, t, t * 1000000 / i, (double)max_time * 1000000 / DOMINANT_FREQUENCY);
+	
 	/*释放*/
-	hash_table_delete(table);
-
-	const static char *modes[2] = { "REF_MODE", "COPY_MODE" };
-	printf("%s performance test end. capacity is %llu, load factor is %f\n\n", modes[mode], capacity, load_factor);
-}
+	htdel(table);
+	static const char *modes[2] = { "REF_MODE", "COPY_MODE" };
+	printf("%s performance test end.\n\n", modes[mode]);
+} 
 
 int main()
 {
 	printf("all test start\n");
 
-	for (int i = 0; i < 10000; ++i) {
-		//每次都是随机种子
-		test_all();
-	}
-
-	//不同的模式和起始表大小和负载因子,添加和查询性能测试
-	test_performance(COPY_MODE, 32, 0.75);
-
-	test_performance(REF_MODE, 32, 0.75);
-
-	test_performance(REF_MODE, 32, 2);
-
-	test_performance(REF_MODE, 32, 0.25);
+	//两种模式添加、查询、重散列、删除和获取所有元素性能测试
+	test_performance(COPY_MODE);
+	test_performance(REF_MODE);
 
 	printf("all test end\n");
 }

@@ -1,12 +1,12 @@
 SRC = xxhash.c xxhash.h hashtable.c hashtable.h test_hash.c
-DEBUG =	-O0 -Wall -Wextra -ggdb
+DEBUG =	-DDEBUG -Og -Wall -Wextra -ggdb
 
-test: $(SRC)
-	gcc -O2 -o $@ $^
+sample_r: $(SRC)
+	gcc -O3 -o $@ $^
 
-debug: $(SRC)
+sample_d: $(SRC)
 	gcc $(DEBUG) -o $@ $^
 	
 .PHONY: clean
 clean:
-	-rm test debug -f
+	-rm sample_r sample_d -f
