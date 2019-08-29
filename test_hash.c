@@ -15,14 +15,6 @@
 #include "hashtable.h"
 
 
-#if defined(__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */)
-# include <stdint.h>
-typedef uint64_t U64;
-#else
-typedef unsigned long long  U64;
-#endif
-
-
 //插入数据量
 #define SAMPLE_SIZE	1000000
 
@@ -34,8 +26,30 @@ typedef unsigned long long  U64;
 
 //打开会计算每次调用时间和每次结果校验（负载均衡测试），打开会有10%到20的性能损失
 #ifndef DEBUG
-//#define DEBUG
+#define DEBUG
 #endif // !DEBUG
+
+
+#if !defined (__VMS) \
+  && (defined (__cplusplus) \
+  || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */) )
+#   include <stdint.h>
+typedef uint32_t U32;
+typedef uint64_t U64;
+#else
+typedef unsigned int U32;
+typedef unsigned long long  U64;
+#endif
+
+#if defined(__x86_64__) || defined(_WIN64)
+#define XXHASH(a, b, c)     XXH64(a, b, c)
+#define XXH_hash_t	XXH64_hash_t
+#else
+#define XXHASH(a, b, c)     XXH32(a, b, c)
+#define XXH_hash_t	XXH32_hash_t
+#endif
+
+#define UNUSED(x)	(void)((x)+1)
 
 /*获取运行时钟周期，比clock()快至少一个数量级*/
 #if defined(_MSC_VER)
@@ -65,9 +79,9 @@ void data_gen(char key[][KEY_LEN], char val[][VALUE_LEN], int size)
 {
 	int i = 0;
 #if defined(_WIN32) || defined(_WIN32_WCE)
-#define HASH_LEN	sizeof(hash_size_t)
+#define HASH_LEN	sizeof(U32)
 	//基于xxhash生成随机字符串
-	hash_size_t h, j, k = 0, lens[2] = { KEY_LEN, VALUE_LEN };
+	XXH_hash_t h, j, k = 0, lens[2] = { KEY_LEN, VALUE_LEN };
 	for (; k < 2; ++k) {
 		for (; i < size; ++i) {
 			j = lens[k];
@@ -98,7 +112,7 @@ void test_performance(table_mode_t mode)
 	data_gen(key, value, SAMPLE_SIZE);
 	
 	/*创建*/
-	hash_table_t* table = htnew(mode);
+	hash_table_t* table = htnew();
 	/*添加*/
 #ifdef DEBUG
 	const char ZEROS[VALUE_LEN] = { 0 };
@@ -130,6 +144,8 @@ void test_performance(table_mode_t mode)
 		tlast = rdtsc() - tlast;
 		if (tlast > max_time) max_time = tlast;
 		assert(res && (!memcmp(res, value[i], VALUE_LEN) || !memcmp(value[i], ZEROS, VALUE_LEN)));
+		UNUSED(ZEROS);
+		UNUSED(res);
 #else
 		htget(table, key[i], KEY_LEN);
 #endif
@@ -144,7 +160,7 @@ void test_performance(table_mode_t mode)
 
 	/*全部元素重新哈希*/
 	t0 = rdtsc();
-	htrh(table, t0);
+	htrh(table, (U32)t0);
 	printf("rehashing in %fs\n", (double)(rdtsc() - t0) / DOMINANT_FREQUENCY);
 
 	/*删除*/
@@ -157,6 +173,7 @@ void test_performance(table_mode_t mode)
 		tlast = rdtsc() - tlast;
 		if (tlast > max_time) max_time = tlast;
 		assert((ret == 0 && !htget(table, key[i], KEY_LEN)) || !memcmp(value[i], ZEROS, VALUE_LEN));
+		UNUSED(ret);
 #else
 		hash_table_remove(table, key[i], KEY_LEN);
 #endif
